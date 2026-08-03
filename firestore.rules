@@ -1,0 +1,18 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /incidents/{incidentId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasAll(['category', 'description', 'latitude', 'longitude', 'status', 'createdAt'])
+        && request.resource.data.category is string
+        && request.resource.data.description is string
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number
+        && request.resource.data.status is string
+        && request.resource.data.createdAt is timestamp;
+      allow update: if request.auth != null && request.auth.token.admin == true;
+      allow delete: if false;
+    }
+  }
+}

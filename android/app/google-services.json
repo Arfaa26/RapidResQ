@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "246356221736",
+    "project_id": "rapiidresq",
+    "storage_bucket": "rapiidresq.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:246356221736:android:d62bd8b56891f337aa3a1d",
+        "android_client_info": {
+          "package_name": "com.example.rapidresq"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "246356221736-ddd17rf2leog8tbd7n34ifh2lk1vsce7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.rapidresq",
+            "certificate_hash": "41461e7e5520749eb87d8d8ba305818f907d3a44"
+          }
+        },
+        {
+          "client_id": "246356221736-01n0m9oluhtuuga00rdlk8dsrjul26kv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDACcctiGKRQLxtspGZGPhIJ7QCcf3Wn-M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "246356221736-01n0m9oluhtuuga00rdlk8dsrjul26kv.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "246356221736-sjrjssblq1lsgiq78g1chl01o7d9it5m.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.rapidresq"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

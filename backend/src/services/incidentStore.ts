@@ -25,7 +25,7 @@ class IncidentStore {
           address: '424 Broadway, Downtown Core, NY',
         },
         reportedBy: {
-          name: 'Olivia Smith',
+          name: 'Arfa Altaf',
           phone: '+1 (555) 019-2834',
           isAnonymous: false,
         },

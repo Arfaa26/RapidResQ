@@ -13,11 +13,21 @@ interface InteractiveMapProps {
   isPicker?: boolean;
 }
 
+const DEFAULT_CENTER: [number, number] = [40.730610, -73.935242];
+
+const escapeHtml = (value: string) => value.replace(/[&<>'"]/g, (character) => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  "'": '&#39;',
+  '"': '&quot;',
+}[character] ?? character));
+
 export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   incidents = [],
   selectedLocation,
   onLocationSelect,
-  center = [40.730610, -73.935242],
+  center = DEFAULT_CENTER,
   zoom = 13,
   height = '350px',
   isPicker = false,
@@ -25,13 +35,19 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
+  const onLocationSelectRef = useRef(onLocationSelect);
+  const [centerLat, centerLng] = center;
+
+  useEffect(() => {
+    onLocationSelectRef.current = onLocationSelect;
+  }, [onLocationSelect]);
 
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
     if (!mapInstanceRef.current) {
       const map = L.map(mapContainerRef.current, {
-        center,
+        center: [centerLat, centerLng],
         zoom,
         zoomControl: !isPicker,
       });
@@ -44,9 +60,9 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       markersRef.current = L.layerGroup().addTo(map);
       mapInstanceRef.current = map;
 
-      if (isPicker && onLocationSelect) {
+      if (isPicker) {
         map.on('click', (e) => {
-          onLocationSelect({
+          onLocationSelectRef.current?.({
             lat: Number(e.latlng.lat.toFixed(5)),
             lng: Number(e.latlng.lng.toFixed(5)),
             address: `Pin at ${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`,
@@ -61,7 +77,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         mapInstanceRef.current = null;
       }
     };
-  }, []);
+  }, [centerLat, centerLng, isPicker, zoom]);
 
   // Update Markers
   useEffect(() => {
@@ -94,7 +110,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       });
 
       const marker = L.marker([selectedLocation.lat, selectedLocation.lng], { icon: customPin });
-      marker.bindPopup(`<b>Selected Incident Location</b><br/>${selectedLocation.address}`);
+      marker.bindPopup(`<b>Selected Incident Location</b><br/>${escapeHtml(selectedLocation.address)}`);
       markersRef.current.addLayer(marker);
       mapInstanceRef.current.setView([selectedLocation.lat, selectedLocation.lng], 14);
       return;
@@ -146,14 +162,14 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       const marker = L.marker([inc.location.lat, inc.location.lng], { icon });
       marker.bindPopup(`
         <div style="font-family: inherit; min-width: 180px;">
-          <div style="font-weight: 700; font-size: 14px; color: #1E1B4B; margin-bottom: 4px;">${inc.title}</div>
-          <div style="font-size: 12px; color: #64748B; margin-bottom: 6px;">📍 ${inc.location.address}</div>
+          <div style="font-weight: 700; font-size: 14px; color: #1E1B4B; margin-bottom: 4px;">${escapeHtml(inc.title)}</div>
+          <div style="font-size: 12px; color: #64748B; margin-bottom: 6px;">📍 ${escapeHtml(inc.location.address)}</div>
           <div style="display: flex; gap: 4px; font-size: 11px; font-weight: 600;">
             <span style="background: ${inc.priority === 'CRITICAL' ? '#FEE2E2' : '#EFF6FF'}; color: ${inc.priority === 'CRITICAL' ? '#DC2626' : '#2563EB'}; padding: 2px 6px; border-radius: 6px;">
-              ${inc.priority}
+              ${escapeHtml(inc.priority)}
             </span>
             <span style="background: #F1F5F9; color: #475569; padding: 2px 6px; border-radius: 6px;">
-              ${inc.status}
+              ${escapeHtml(inc.status)}
             </span>
           </div>
         </div>

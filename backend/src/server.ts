@@ -3,19 +3,63 @@ import cors from 'cors';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { incidentStore } from './services/incidentStore.js';
 import { triageIncident } from './services/aiTriage.js';
 import { Incident, IncidentStatus, AssignedUnit } from './types/index.js';
 
-dotenv.config();
+dotenv.config({ quiet: true });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const configuredPort = Number.parseInt(process.env.PORT || '', 10);
+const PORT = Number.isInteger(configuredPort) && configuredPort > 0 ? configuredPort : 5000;
+const validStatuses = new Set<IncidentStatus>(['PENDING', 'ACKNOWLEDGED', 'IN_PROGRESS', 'RESOLVED']);
+const uploadExtensions = new Map([
+  ['image/jpeg', '.jpg'],
+  ['image/png', '.png'],
+  ['image/gif', '.gif'],
+  ['image/webp', '.webp'],
+  ['video/mp4', '.mp4'],
+  ['video/webm', '.webm'],
+  ['video/quicktime', '.mov'],
+]);
+
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Unexpected server error';
+
+const removeUploadedFile = (file?: Express.Multer.File) => {
+  if (!file?.path) return;
+  fs.rm(file.path, { force: true }, (error) => {
+    if (error) console.warn(`Unable to remove temporary upload ${file.filename}:`, error);
+  });
+};
+
+const parseCoordinate = (value: unknown, min: number, max: number) => {
+  const parsed = typeof value === 'string' || typeof value === 'number' ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : undefined;
+};
+
+const parsePositiveInteger = (value: unknown) => {
+  const parsed = typeof value === 'string' || typeof value === 'number'
+    ? Number.parseInt(String(value), 10)
+    : Number.NaN;
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+};
+
+const parseAccuracy = (value: unknown) => {
+  const parsed = typeof value === 'string' || typeof value === 'number' ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : undefined;
+};
+
+const parseTimestamp = (value: unknown) => {
+  if (typeof value !== 'string') return undefined;
+  const timestamp = new Date(value);
+  return Number.isNaN(timestamp.getTime()) ? undefined : timestamp.toISOString();
+};
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '../uploads');
@@ -30,7 +74,7 @@ const storage = multer.diskStorage({
   },
   filename: (_req, file, cb) => {
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const ext = path.extname(file.originalname) || '.jpg';
+    const ext = uploadExtensions.get(file.mimetype) || '.bin';
     cb(null, `report-${uniqueSuffix}${ext}`);
   },
 });
@@ -38,13 +82,28 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB max
+  fileFilter: (_req, file, cb) => {
+    if (uploadExtensions.has(file.mimetype)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error('Only image and video uploads are supported.'));
+  },
 });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+app.use((_req: Request, res: Response, next: express.NextFunction) => {
+  res.setHeader('Permissions-Policy', 'geolocation=(self)');
+  next();
+});
 app.use('/uploads', express.static(uploadsDir));
 
 // --- API ROUTES ---
+
+app.get('/api/health', (_req: Request, res: Response) => {
+  res.json({ success: true, status: 'ok', timestamp: new Date().toISOString() });
+});
 
 // 1. Get all incidents with optional filters
 app.get('/api/incidents', (req: Request, res: Response) => {
@@ -70,7 +129,7 @@ app.get('/api/incidents/:id', (req: Request, res: Response) => {
 // 3. AI Triage Preview (for live instant feedback in the Mobile App)
 app.post('/api/ai/preview', upload.single('media'), async (req: Request, res: Response) => {
   try {
-    const { title, description, categoryHint } = req.body;
+    const { title, description, categoryHint } = req.body ?? {};
     let imageBuffer: Buffer | undefined;
     let mimeType: string | undefined;
 
@@ -88,8 +147,11 @@ app.post('/api/ai/preview', upload.single('media'), async (req: Request, res: Re
     });
 
     res.json({ success: true, aiAnalysis: aiResult });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+  } catch (error: unknown) {
+    res.status(500).json({ success: false, error: errorMessage(error) });
+  } finally {
+    // Preview uploads are temporary; only submitted incident media is retained.
+    removeUploadedFile(req.file);
   }
 });
 
@@ -107,7 +169,36 @@ app.post('/api/incidents', upload.single('media'), async (req: Request, res: Res
       reporterPhone,
       isAnonymous,
       isEmergencySOS,
-    } = req.body;
+      accuracyMeters,
+      capturedAt,
+      locationSource,
+    } = req.body ?? {};
+
+    const emergencySos = isEmergencySOS === 'true' || isEmergencySOS === true;
+    if (!emergencySos && !req.file && !String(title || '').trim() && !String(description || '').trim()) {
+      removeUploadedFile(req.file);
+      return res.status(400).json({ success: false, error: 'Add a title, description, or media file.' });
+    }
+
+    const latitude = parseCoordinate(lat, -90, 90);
+    const longitude = parseCoordinate(lng, -180, 180);
+    const gpsAccuracy = parseAccuracy(accuracyMeters);
+    const gpsCapturedAt = parseTimestamp(capturedAt);
+    const isGpsLocation = locationSource === 'GPS';
+
+    if (isGpsLocation && (
+      latitude === undefined
+      || longitude === undefined
+      || gpsAccuracy === undefined
+      || gpsAccuracy > 250
+      || gpsCapturedAt === undefined
+    )) {
+      removeUploadedFile(req.file);
+      return res.status(400).json({
+        success: false,
+        error: 'A valid live GPS fix with accuracy and capture time is required.',
+      });
+    }
 
     let mediaUrl: string | undefined;
     let imageBuffer: Buffer | undefined;
@@ -129,11 +220,11 @@ app.post('/api/incidents', upload.single('media'), async (req: Request, res: Res
     });
 
     // If SOS triggered explicitly, ensure priority is CRITICAL
-    if (isEmergencySOS === 'true' || isEmergencySOS === true) {
+    if (emergencySos) {
       aiAnalysis.priority = 'CRITICAL';
     }
 
-    const newId = `INC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newId = `INC-${new Date().getUTCFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`;
     const now = new Date().toISOString();
 
     const incident: Incident = {
@@ -141,18 +232,21 @@ app.post('/api/incidents', upload.single('media'), async (req: Request, res: Res
       title: title || `${aiAnalysis.hazardType} at ${address ? address.split(',')[0] : 'Current Location'}`,
       description: description || 'Citizen reported an urgent incident.',
       mediaUrl,
-      mediaType: req.file?.mimetype.startsWith('video') ? 'video' : 'image',
+      mediaType: req.file ? (req.file.mimetype.startsWith('video/') ? 'video' : 'image') : undefined,
       category: aiAnalysis.detectedCategory,
       priority: aiAnalysis.priority,
       department: aiAnalysis.department,
       status: 'PENDING',
       location: {
-        lat: parseFloat(lat) || 40.7128,
-        lng: parseFloat(lng) || -74.0060,
+        lat: latitude ?? 40.7128,
+        lng: longitude ?? -74.0060,
         address: address || 'Downtown Metropolitan Area',
+        accuracyMeters: gpsAccuracy,
+        capturedAt: gpsCapturedAt,
+        source: isGpsLocation ? 'GPS' : undefined,
       },
       reportedBy: {
-        name: reporterName || 'Olivia Smith',
+        name: reporterName || 'Arfa Altaf',
         phone: reporterPhone || '+1 (555) 019-2834',
         isAnonymous: isAnonymous === 'true' || isAnonymous === true,
       },
@@ -172,9 +266,10 @@ app.post('/api/incidents', upload.single('media'), async (req: Request, res: Res
 
     const saved = incidentStore.createIncident(incident);
     res.status(201).json({ success: true, incident: saved });
-  } catch (err: any) {
-    console.error('Error creating incident:', err);
-    res.status(500).json({ success: false, error: err.message });
+  } catch (error: unknown) {
+    removeUploadedFile(req.file);
+    console.error('Error creating incident:', error);
+    res.status(500).json({ success: false, error: errorMessage(error) });
   }
 });
 
@@ -182,7 +277,12 @@ app.post('/api/incidents', upload.single('media'), async (req: Request, res: Res
 app.patch('/api/incidents/:id/status', upload.single('proofPhoto'), (req: Request, res: Response) => {
   try {
     const incidentId = req.params.id as string;
-    const { status, note, updatedBy, unitName, unitBadge, unitPhone, etaMinutes } = req.body;
+    const { status, note, updatedBy, unitName, unitBadge, unitPhone, etaMinutes } = req.body ?? {};
+
+    if (!validStatuses.has(status as IncidentStatus)) {
+      removeUploadedFile(req.file);
+      return res.status(400).json({ success: false, error: 'Invalid incident status.' });
+    }
     
     let proofPhotoUrl: string | undefined;
     if (req.file) {
@@ -196,7 +296,7 @@ app.patch('/api/incidents/:id/status', upload.single('proofPhoto'), (req: Reques
         name: unitName,
         badge: unitBadge || 'DISPATCH-01',
         phone: unitPhone || '+1 (555) 911-0000',
-        etaMinutes: etaMinutes ? parseInt(etaMinutes, 10) : undefined,
+        etaMinutes: parsePositiveInteger(etaMinutes),
       };
     }
 
@@ -210,12 +310,14 @@ app.patch('/api/incidents/:id/status', upload.single('proofPhoto'), (req: Reques
     );
 
     if (!updated) {
+      removeUploadedFile(req.file);
       return res.status(404).json({ success: false, message: 'Incident not found' });
     }
 
     res.json({ success: true, incident: updated });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+  } catch (error: unknown) {
+    removeUploadedFile(req.file);
+    res.status(500).json({ success: false, error: errorMessage(error) });
   }
 });
 
@@ -231,12 +333,28 @@ app.post('/api/seed', (_req: Request, res: Response) => {
   res.json({ success: true, message: 'Demo data reseeded' });
 });
 
+app.use((error: unknown, _req: Request, res: Response, _next: express.NextFunction) => {
+  if (error instanceof multer.MulterError) {
+    const message = error.code === 'LIMIT_FILE_SIZE'
+      ? 'Upload is too large. The maximum file size is 25 MB.'
+      : error.message;
+    res.status(400).json({ success: false, error: message });
+    return;
+  }
+
+  res.status(400).json({ success: false, error: errorMessage(error) });
+});
+
 // Serve frontend in production if built
 const frontendDist = path.join(__dirname, '../../frontend/dist');
 if (fs.existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
-  app.get('*', (_req: Request, res: Response) => {
-    res.sendFile(path.join(frontendDist, 'index.html'));
+  app.use((req: Request, res: Response, next: express.NextFunction) => {
+    if (req.method === 'GET' && req.accepts('html')) {
+      res.sendFile(path.join(frontendDist, 'index.html'));
+      return;
+    }
+    next();
   });
 }
 

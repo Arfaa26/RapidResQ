@@ -24,6 +24,9 @@ export interface LocationData {
   lat: number;
   lng: number;
   address: string;
+  accuracyMeters?: number;
+  capturedAt?: string;
+  source?: 'GPS' | 'FALLBACK';
 }
 
 export interface AIAnalysisResult {

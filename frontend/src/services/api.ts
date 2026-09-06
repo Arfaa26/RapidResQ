@@ -1,6 +1,18 @@
 import { Incident, DashboardStats, AIAnalysisResult } from '../types';
 
-const API_BASE = '/api';
+const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? '';
+const API_BASE = `${configuredBaseUrl}/api`;
+
+async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init);
+  const data = await response.json().catch(() => null) as { error?: string; message?: string } | null;
+
+  if (!response.ok) {
+    throw new Error(data?.error || data?.message || `Request failed (${response.status})`);
+  }
+
+  return data as T;
+}
 
 export const api = {
   async getIncidents(filters?: { department?: string; status?: string; priority?: string }): Promise<Incident[]> {
@@ -9,36 +21,28 @@ export const api = {
     if (filters?.status) params.append('status', filters.status);
     if (filters?.priority) params.append('priority', filters.priority);
 
-    const res = await fetch(`${API_BASE}/incidents?${params.toString()}`);
-    if (!res.ok) throw new Error('Failed to fetch incidents');
-    const data = await res.json();
+    const data = await request<{ incidents: Incident[] }>(`${API_BASE}/incidents?${params.toString()}`);
     return data.incidents;
   },
 
   async getIncident(id: string): Promise<Incident> {
-    const res = await fetch(`${API_BASE}/incidents/${id}`);
-    if (!res.ok) throw new Error('Failed to fetch incident');
-    const data = await res.json();
+    const data = await request<{ incident: Incident }>(`${API_BASE}/incidents/${id}`);
     return data.incident;
   },
 
   async createIncident(formData: FormData): Promise<Incident> {
-    const res = await fetch(`${API_BASE}/incidents`, {
+    const data = await request<{ incident: Incident }>(`${API_BASE}/incidents`, {
       method: 'POST',
       body: formData,
     });
-    if (!res.ok) throw new Error('Failed to submit incident');
-    const data = await res.json();
     return data.incident;
   },
 
   async previewAI(formData: FormData): Promise<AIAnalysisResult> {
-    const res = await fetch(`${API_BASE}/ai/preview`, {
+    const data = await request<{ aiAnalysis: AIAnalysisResult }>(`${API_BASE}/ai/preview`, {
       method: 'POST',
       body: formData,
     });
-    if (!res.ok) throw new Error('AI preview failed');
-    const data = await res.json();
     return data.aiAnalysis;
   },
 
@@ -65,23 +69,19 @@ export const api = {
     if (payload.etaMinutes) formData.append('etaMinutes', payload.etaMinutes.toString());
     if (payload.proofPhoto) formData.append('proofPhoto', payload.proofPhoto);
 
-    const res = await fetch(`${API_BASE}/incidents/${id}/status`, {
+    const data = await request<{ incident: Incident }>(`${API_BASE}/incidents/${id}/status`, {
       method: 'PATCH',
       body: formData,
     });
-    if (!res.ok) throw new Error('Failed to update incident status');
-    const data = await res.json();
     return data.incident;
   },
 
   async getStats(): Promise<DashboardStats> {
-    const res = await fetch(`${API_BASE}/stats`);
-    if (!res.ok) throw new Error('Failed to fetch stats');
-    const data = await res.json();
+    const data = await request<{ stats: DashboardStats }>(`${API_BASE}/stats`);
     return data.stats;
   },
 
   async resetSeed(): Promise<void> {
-    await fetch(`${API_BASE}/seed`, { method: 'POST' });
+    await request<{ success: boolean }>(`${API_BASE}/seed`, { method: 'POST' });
   }
 };

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Flame, Car, Building, ShieldAlert, Filter, MapPin } from 'lucide-react';
-import { Incident, IncidentCategory } from '../../types';
+import { ArrowLeft, MapPin } from 'lucide-react';
+import { Incident } from '../../types';
 import { InteractiveMap } from '../common/InteractiveMap';
 
 interface CommunityAlertsScreenProps {

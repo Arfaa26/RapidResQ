@@ -105,6 +105,11 @@ export const ActiveSosScreen: React.FC<ActiveSosScreenProps> = ({
         <p className="text-[11px] text-[#6B7280] mb-2 font-medium">
           {userLocation.address}
         </p>
+        {userLocation.accuracyMeters !== undefined && (
+          <p className="mb-2 text-[10px] font-bold text-emerald-600">
+            Device GPS accuracy ±{userLocation.accuracyMeters} m
+          </p>
+        )}
         <div className="h-28 rounded-xl overflow-hidden shadow-inner border border-gray-100">
           <InteractiveMap
             selectedLocation={userLocation}

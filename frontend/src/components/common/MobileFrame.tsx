@@ -1,10 +1,12 @@
 import React from 'react';
-import { Wifi, Battery, Signal, Home, Camera, Bell, User } from 'lucide-react';
+import { Wifi, Battery, Signal, Home, Camera, Bell, ShieldAlert } from 'lucide-react';
+
+export type MobileTab = 'home' | 'report' | 'alerts' | 'sos';
 
 interface MobileFrameProps {
   children: React.ReactNode;
-  activeTab?: 'home' | 'report' | 'alerts' | 'profile';
-  onTabChange?: (tab: 'home' | 'report' | 'alerts' | 'profile') => void;
+  activeTab?: MobileTab;
+  onTabChange?: (tab: MobileTab) => void;
   hideBottomNav?: boolean;
 }
 
@@ -14,11 +16,11 @@ export const MobileFrame: React.FC<MobileFrameProps> = ({
   onTabChange,
   hideBottomNav = false,
 }) => {
-  const tabs: { id: 'home' | 'report' | 'alerts' | 'profile'; icon: React.ReactNode }[] = [
+  const tabs: { id: MobileTab; icon: React.ReactNode }[] = [
     { id: 'home', icon: <Home size={22} className="stroke-[2.5]" /> },
     { id: 'report', icon: <Camera size={22} className="stroke-[2.5]" /> },
     { id: 'alerts', icon: <Bell size={22} className="stroke-[2.5]" /> },
-    { id: 'profile', icon: <User size={22} className="stroke-[2.5]" /> },
+    { id: 'sos', icon: <ShieldAlert size={22} className="stroke-[2.5]" /> },
   ];
 
   const activeIndex = Math.max(0, tabs.findIndex(t => t.id === activeTab));

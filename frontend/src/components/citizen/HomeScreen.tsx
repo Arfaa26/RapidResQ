@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Bell, 
   Phone, 
@@ -38,6 +38,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [showFakeCallModal, setShowFakeCallModal] = useState(false);
   const [showTimerModal, setShowTimerModal] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(300); // 5 mins
+  const [isTimerActive, setIsTimerActive] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isTimerActive) return;
+
+    const timeoutId = window.setTimeout(() => {
+      if (timerSeconds <= 1) {
+        setTimerSeconds(0);
+        setIsTimerActive(false);
+        setShowTimerModal(false);
+        soundAlerts.playEmergencySiren();
+        onTriggerSos();
+        return;
+      }
+      setTimerSeconds((seconds) => seconds - 1);
+    }, 1000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isTimerActive, onTriggerSos, timerSeconds]);
 
   const safetyTips = [
     {
@@ -62,19 +82,44 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     onTriggerSos();
   };
 
+  const handleShareLocation = async () => {
+    const mapsUrl = `https://www.openstreetmap.org/?mlat=${userLocation.lat}&mlon=${userLocation.lng}#map=16/${userLocation.lat}/${userLocation.lng}`;
+    const text = `My live location: ${userLocation.address}\n${mapsUrl}`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'RapidResQ live location', text, url: mapsUrl });
+        setShareFeedback('Location shared.');
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(text);
+        setShareFeedback('Location link copied.');
+      } else {
+        setShareFeedback(text);
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      setShareFeedback('Unable to share automatically. Copy the location from the GPS card.');
+    }
+
+    window.setTimeout(() => setShareFeedback(null), 3500);
+  };
+
+  const formattedTimer = `${Math.floor(timerSeconds / 60)}:${(timerSeconds % 60).toString().padStart(2, '0')}`;
+
   return (
     <div className="flex flex-col min-h-full pb-20 bg-[#F5F4FA] text-[#1E1B4B] p-4 select-none">
       {/* 1. Header Card with Purple Gradient */}
       <div className="w-full bg-gradient-to-r from-[#6247F5] via-[#755DF7] to-[#8872FA] rounded-2xl p-4 flex items-center justify-between shadow-md shadow-purple-500/15 mb-4 text-white">
         <div className="flex items-center space-x-3">
-          <img
-            src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80"
-            alt="Olivia Smith"
-            className="w-12 h-12 rounded-full object-cover border-2 border-white/60 shadow-sm"
-          />
+          <div
+            aria-label="Arfa Altaf"
+            className="w-12 h-12 rounded-full border-2 border-white/60 bg-white/20 shadow-sm flex items-center justify-center text-sm font-black text-white"
+          >
+            AA
+          </div>
           <div>
             <div className="text-xs text-white/80 font-medium">Welcome back,</div>
-            <div className="text-base font-bold text-white tracking-wide">Olivia Smith</div>
+            <div className="text-base font-bold text-white tracking-wide">Arfa Altaf</div>
           </div>
         </div>
 
@@ -91,10 +136,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Live GPS Telemetry Status Pill */}
       <div className="bg-white/80 backdrop-blur-sm border border-purple-100/80 rounded-2xl px-3.5 py-2 flex items-center justify-between shadow-sm mb-4 text-xs">
         <div className="flex items-center space-x-2 truncate pr-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping flex-shrink-0" />
-          <span className="text-[11px] font-bold text-[#1E1B4B] truncate">
-            📍 {userLocation.address}
-          </span>
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+            userLocation.source === 'GPS' ? 'bg-emerald-500 animate-ping' : 'bg-amber-500'
+          }`} />
+          <div className="min-w-0">
+            <div className="text-[11px] font-bold text-[#1E1B4B] truncate">
+              📍 {userLocation.address}
+            </div>
+            {userLocation.source === 'GPS' && userLocation.accuracyMeters !== undefined && (
+              <div className="text-[9px] font-semibold text-emerald-600">GPS accuracy ±{userLocation.accuracyMeters} m</div>
+            )}
+          </div>
         </div>
         <button
           onClick={onRefreshLocation}
@@ -157,7 +209,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
         {/* Share Location */}
         <button 
-          onClick={onNavigateAlerts}
+          onClick={() => void handleShareLocation()}
           className="bg-white rounded-2xl p-2.5 flex flex-col items-center justify-center shadow-sm hover:shadow-md active:scale-95 transition-all group"
         >
           <div className="w-11 h-11 rounded-full bg-[#5E43F3]/15 flex items-center justify-center mb-1.5 text-[#5E43F3] group-hover:scale-105 transition-transform">
@@ -174,7 +226,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <div className="w-11 h-11 rounded-full bg-[#F59E0B]/15 flex items-center justify-center mb-1.5 text-[#F59E0B] group-hover:scale-105 transition-transform">
             <ShieldAlert size={18} />
           </div>
-          <span className="text-[11px] font-semibold text-[#4B5563] text-center leading-tight">Safety Timer</span>
+          <span className="text-[11px] font-semibold text-[#4B5563] text-center leading-tight">
+            {isTimerActive ? formattedTimer : 'Safety Timer'}
+          </span>
         </button>
 
         {/* Voice Record / Report */}
@@ -346,19 +400,38 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </div>
 
             <div className="text-3xl font-black text-[#5E43F3] mb-6 font-mono">
-              {Math.floor(timerSeconds / 60)}:{(timerSeconds % 60).toString().padStart(2, '0')}
+              {formattedTimer}
             </div>
 
             <button
               onClick={() => {
-                setShowTimerModal(false);
+                setTimerSeconds(300);
+                setIsTimerActive(true);
                 soundAlerts.playChime();
               }}
+              disabled={isTimerActive}
               className="w-full bg-[#5E43F3] text-white py-3 rounded-full font-bold text-xs shadow-md shadow-purple-500/25"
             >
-              Confirm & Start Timer
+              {isTimerActive ? 'Timer Running' : 'Start 5-Minute Timer'}
+            </button>
+
+            <button
+              onClick={() => {
+                setIsTimerActive(false);
+                setTimerSeconds(300);
+                setShowTimerModal(false);
+              }}
+              className="mt-2 w-full py-2.5 text-xs font-bold text-gray-500"
+            >
+              {isTimerActive ? 'Cancel Safety Timer' : 'Not Now'}
             </button>
           </div>
+        </div>
+      )}
+
+      {shareFeedback && (
+        <div className="fixed bottom-8 left-1/2 z-[60] w-[calc(100%-2rem)] max-w-xs -translate-x-1/2 rounded-2xl bg-[#1E1B4B] px-4 py-3 text-center text-xs font-semibold text-white shadow-xl">
+          {shareFeedback}
         </div>
       )}
     </div>

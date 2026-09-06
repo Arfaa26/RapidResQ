@@ -2,14 +2,21 @@
   "name": "rapidresq-system",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "dev:backend": "cd backend && npm run dev",
-    "dev:frontend": "cd frontend && npm run dev",
+    "install:apps": "npm install --prefix backend && npm install --prefix frontend",
+    "postinstall": "npm run install:apps",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
     "dev": "concurrently -n \"API,WEB\" -c \"bgBlue.bold,bgMagenta.bold\" \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "build:frontend": "cd frontend && npm install && npm run build",
-    "build:backend": "cd backend && npm install && npm run build",
+    "build:frontend": "npm --prefix frontend run build",
+    "build:backend": "npm --prefix backend run build",
     "build": "npm run build:frontend && npm run build:backend",
-    "start": "cd backend && npm start"
+    "lint": "npm --prefix frontend run lint",
+    "check": "npm run lint && npm run build",
+    "start": "npm --prefix backend start"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

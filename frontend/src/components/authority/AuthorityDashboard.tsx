@@ -2,28 +2,19 @@ import React, { useState } from 'react';
 import { 
   ShieldAlert, 
   Flame, 
-  Car, 
   Building, 
   Radio, 
-  Bell, 
   Volume2, 
   VolumeX, 
   CheckCircle2, 
-  Clock, 
   Truck, 
-  Send, 
   RefreshCw, 
-  Filter, 
-  Search, 
   Sparkles, 
-  UploadCloud,
-  ChevronRight,
-  ExternalLink,
   MapPin,
   Phone,
   User
 } from 'lucide-react';
-import { Incident, DepartmentType, IncidentStatus, DashboardStats } from '../../types';
+import { Incident, IncidentStatus, DashboardStats } from '../../types';
 import { InteractiveMap } from '../common/InteractiveMap';
 import { api } from '../../services/api';
 import { soundAlerts } from '../../utils/audioAlert';
@@ -44,7 +35,7 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
 }) => {
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
-  const [selectedIncident, setSelectedIncident] = useState<Incident | null>(incidents[0] || null);
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -52,7 +43,7 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
   const [dispatcherNote, setDispatcherNote] = useState('');
   const [assignedUnitName, setAssignedUnitName] = useState('');
   const [assignedUnitBadge, setAssignedUnitBadge] = useState('');
-  const [etaInput, setEtaInput] = useState<number>(5);
+  const [etaInput, setEtaInput] = useState('5');
   const [proofFile, setProofFile] = useState<File | null>(null);
 
   const departments: { id: string; name: string; icon: React.ReactNode; color: string }[] = [
@@ -70,7 +61,14 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
     return true;
   });
 
-  const criticalCount = incidents.filter(i => i.priority === 'CRITICAL' && i.status !== 'RESOLVED').length;
+  // Incident data arrives asynchronously. Keep selection by ID so the first
+  // incident is available immediately after loading and refreshes stay current.
+  const selectedIncident = filteredIncidents.find((inc) => inc.id === selectedIncidentId)
+    ?? filteredIncidents[0]
+    ?? null;
+
+  const criticalCount = stats?.criticalActive
+    ?? incidents.filter(i => i.priority === 'CRITICAL' && i.status !== 'RESOLVED').length;
 
   const handleStatusChange = async (newStatus: IncidentStatus) => {
     if (!selectedIncident) return;
@@ -82,11 +80,11 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
         updatedBy: `${selectedIncident.department.replace('_', ' ')} Commander`,
         unitName: assignedUnitName || selectedIncident.assignedUnit?.name,
         unitBadge: assignedUnitBadge || selectedIncident.assignedUnit?.badge,
-        etaMinutes: etaInput,
+        etaMinutes: Number.parseInt(etaInput, 10) || undefined,
         proofPhoto: proofFile || undefined,
       });
 
-      setSelectedIncident(updated);
+      setSelectedIncidentId(updated.id);
       onUpdateIncident(updated);
       setDispatcherNote('');
       setProofFile(null);
@@ -100,8 +98,8 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
       } else {
         soundAlerts.playChime();
       }
-    } catch (err: any) {
-      alert('Failed to update status: ' + err.message);
+    } catch (error: unknown) {
+      alert('Failed to update status: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsUpdating(false);
     }
@@ -228,7 +226,7 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
               return (
                 <div
                   key={inc.id}
-                  onClick={() => setSelectedIncident(inc)}
+                  onClick={() => setSelectedIncidentId(inc.id)}
                   className={`bg-slate-800/90 rounded-2xl p-4 border transition-all cursor-pointer relative ${
                     isSelected
                       ? 'border-[#5E43F3] shadow-lg shadow-purple-500/10 ring-1 ring-[#5E43F3]'
@@ -335,6 +333,38 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
                 </div>
               </div>
 
+              {/* Reporter GPS telemetry */}
+              <div className="flex flex-col gap-2 rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-start space-x-2">
+                  <MapPin size={16} className="mt-0.5 flex-shrink-0 text-emerald-400" />
+                  <div className="min-w-0">
+                    <div className="truncate text-xs font-bold text-white">
+                      {selectedIncident.location.address}
+                    </div>
+                    <div className="mt-0.5 font-mono text-[10px] text-slate-400">
+                      {selectedIncident.location.lat.toFixed(6)}, {selectedIncident.location.lng.toFixed(6)}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold">
+                  {selectedIncident.location.source === 'GPS' && (
+                    <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-emerald-300">
+                      LIVE DEVICE GPS
+                    </span>
+                  )}
+                  {selectedIncident.location.accuracyMeters !== undefined && (
+                    <span className="rounded-full bg-slate-700 px-2 py-1 text-slate-200">
+                      ±{selectedIncident.location.accuracyMeters} m accuracy
+                    </span>
+                  )}
+                  {selectedIncident.location.capturedAt && (
+                    <span className="text-slate-400">
+                      Captured {new Date(selectedIncident.location.capturedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+              </div>
+
               {/* Two columns: Photo Evidence & AI Analysis */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Media Evidence */}
@@ -342,11 +372,19 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
                   <div className="text-xs font-bold text-slate-300 mb-2">Citizen Uploaded Evidence</div>
                   {selectedIncident.mediaUrl ? (
                     <div className="rounded-xl overflow-hidden border border-slate-700 max-h-52 bg-black">
-                      <img
-                        src={selectedIncident.mediaUrl}
-                        alt="Evidence"
-                        className="w-full h-52 object-cover"
-                      />
+                      {selectedIncident.mediaType === 'video' ? (
+                        <video
+                          src={selectedIncident.mediaUrl}
+                          className="w-full h-52 object-cover"
+                          controls
+                        />
+                      ) : (
+                        <img
+                          src={selectedIncident.mediaUrl}
+                          alt="Evidence"
+                          className="w-full h-52 object-cover"
+                        />
+                      )}
                     </div>
                   ) : (
                     <div className="h-52 rounded-xl bg-slate-900 border border-slate-700/60 flex flex-col items-center justify-center text-slate-500 text-xs">
@@ -419,7 +457,8 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
                     type="number"
                     placeholder="ETA (Minutes)"
                     value={etaInput}
-                    onChange={(e) => setEtaInput(parseInt(e.target.value, 10))}
+                    min="1"
+                    onChange={(e) => setEtaInput(e.target.value)}
                     className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
                   />
                 </div>

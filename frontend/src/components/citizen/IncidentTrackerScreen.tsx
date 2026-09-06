@@ -3,15 +3,9 @@ import {
   ArrowLeft, 
   CheckCircle2, 
   Clock, 
-  ShieldCheck, 
-  Flame, 
-  Car, 
-  Building, 
   Phone, 
   MapPin, 
-  Sparkles, 
-  CheckCircle,
-  AlertCircle
+  Sparkles
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Incident, IncidentStatus } from '../../types';
@@ -96,13 +90,24 @@ export const IncidentTrackerScreen: React.FC<IncidentTrackerScreenProps> = ({
         {/* Media Photo if available */}
         {incident.mediaUrl && (
           <div className="rounded-2xl overflow-hidden mb-3 border border-gray-100 shadow-inner max-h-44">
-            <img src={incident.mediaUrl} alt={incident.title} className="w-full h-44 object-cover" />
+            {incident.mediaType === 'video' ? (
+              <video src={incident.mediaUrl} className="w-full h-44 object-cover" controls />
+            ) : (
+              <img src={incident.mediaUrl} alt={incident.title} className="w-full h-44 object-cover" />
+            )}
           </div>
         )}
 
         <div className="flex items-center space-x-2 text-[11px] text-[#6B7280] bg-[#F4F3FA] p-2.5 rounded-xl">
           <MapPin size={14} className="text-[#5E43F3] flex-shrink-0" />
-          <span className="truncate font-medium">{incident.location.address}</span>
+          <div className="min-w-0">
+            <div className="truncate font-medium">{incident.location.address}</div>
+            {incident.location.accuracyMeters !== undefined && (
+              <div className="mt-0.5 text-[9px] font-bold text-emerald-600">
+                Live GPS accuracy ±{incident.location.accuracyMeters} m
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

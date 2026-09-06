@@ -37,7 +37,7 @@ An intelligent, real-time emergency triage and incident dispatch platform design
    - 3D Neumorphic Purple SOS Shield with floating status beacons
    - *"Help is Just a Tap Away"* title with gradient pill button
 2. **Screen 2 (Home Dashboard)**:
-   - Welcome banner with user profile avatar
+   - Welcome banner with user initials avatar
    - Coral-Red Hero Emergency SOS Box with pulsating beacon
    - 4-Grid Quick Actions: *Emergency Fake Call*, *Share Location*, *Safety Timer (SafeWalk)*, *Voice Record*
    - Safety Tips Carousel
@@ -76,20 +76,39 @@ An intelligent, real-time emergency triage and incident dispatch platform design
 - **Node.js** v18+ (v24 tested)
 - **npm** v10+
 
-### 2. Run Both Frontend & Backend Concurrently
+### 2. Install Dependencies
 From the root directory:
 
 ```bash
-# In the safecity-incident-system directory
-npm run dev:backend   # Starts API server on http://localhost:5000
-npm run dev:frontend  # Starts Frontend UI on http://localhost:3000
+npm install
 ```
 
-### 3. Open in Browser
+The root install also installs the backend and frontend dependencies.
+
+### 3. Run in Development
+
+```bash
+npm run dev
+```
+
+This starts the API on **`http://localhost:5000`** and the frontend on **`http://localhost:3000`**. To run them separately, use `npm run dev:backend` and `npm run dev:frontend`.
+
+### 4. Open in Browser
 Open **`http://localhost:3000`** in your browser.
 
 - Use the top navigation bar to toggle between **📱 Citizen Mobile App**, **🖥️ Authority Command Center**, or **📱 ↔ 🖥️ Live Split Demo**.
 - Click the simulation buttons (**Fire**, **Accident**, **Civic**) to test instant emergency injections.
+- Allow **precise location** when the browser asks. Incident and SOS submissions wait for a fresh device GPS fix and include its accuracy and capture time for the authority dashboard.
+- Browsers permit GPS on `localhost`; deployed copies must use HTTPS for live geolocation.
+
+### 5. Production Build
+
+```bash
+npm run check
+npm start
+```
+
+The production server hosts both the API and the built frontend at **`http://localhost:5000`**. Its health endpoint is **`/api/health`**.
 
 ---
 
@@ -107,3 +126,5 @@ GEMINI_API_KEY=your_gemini_api_key_here
 # Optional: Firebase Project Credentials
 FIREBASE_PROJECT_ID=your_firebase_project_id
 ```
+
+When hosting the frontend and API on different origins, copy `frontend/.env.example` to `frontend/.env` and set `VITE_API_BASE_URL` to the backend origin before building. It is not needed for the default development or production setup.

@@ -1,16 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { 
   Camera, 
-  Upload, 
   MapPin, 
   Sparkles, 
   ArrowLeft, 
-  AlertCircle, 
   Flame, 
   Car, 
   Building, 
   ShieldAlert, 
-  CheckCircle2, 
   Loader2,
   ArrowRight
 } from 'lucide-react';
@@ -41,9 +38,45 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiPreview, setAiPreview] = useState<AIAnalysisResult | null>(null);
   const [isAnalyzingAi, setIsAnalyzingAi] = useState(false);
-  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const locationRequestRef = useRef<Promise<LocationData> | null>(null);
+
+  const refreshAccurateLocation = useCallback(async (): Promise<LocationData> => {
+    if (locationRequestRef.current) return locationRequestRef.current;
+
+    setIsLocating(true);
+    setLocationError(null);
+    const request = locationService.getAccurateCurrentLocation();
+    locationRequestRef.current = request;
+
+    try {
+      const liveLocation = await request;
+      setSelectedLocation(liveLocation);
+      return liveLocation;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to acquire precise GPS location.';
+      setLocationError(message);
+      throw error;
+    } finally {
+      locationRequestRef.current = null;
+      setIsLocating(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (mediaPreview) URL.revokeObjectURL(mediaPreview);
+    };
+  }, [mediaPreview]);
+
+  useEffect(() => {
+    // Start acquiring a fresh GPS fix as soon as the report screen opens.
+    // oxlint-disable-next-line react/set-state-in-effect
+    void refreshAccurateLocation().catch(() => undefined);
+  }, [refreshAccurateLocation]);
 
   const categories: { id: IncidentCategory; label: string; icon: React.ReactNode; color: string }[] = [
     { id: 'FIRE', label: 'Fire & Rescue', icon: <Flame size={14} />, color: 'bg-red-50 text-red-600 border-red-200' },
@@ -55,6 +88,11 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
   const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if ((!file.type.startsWith('image/') && !file.type.startsWith('video/')) || file.size > 25 * 1024 * 1024) {
+        alert('Choose an image or video smaller than 25 MB.');
+        e.target.value = '';
+        return;
+      }
       setMediaFile(file);
       const url = URL.createObjectURL(file);
       setMediaPreview(url);
@@ -88,14 +126,20 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
 
     try {
       setIsSubmitting(true);
+      const liveLocation = await refreshAccurateLocation();
       const formData = new FormData();
       if (title) formData.append('title', title);
       formData.append('description', description);
       formData.append('categoryHint', selectedCategory);
-      formData.append('lat', selectedLocation.lat.toString());
-      formData.append('lng', selectedLocation.lng.toString());
-      formData.append('address', selectedLocation.address);
-      formData.append('reporterName', isAnonymous ? 'Anonymous Citizen' : 'Olivia Smith');
+      formData.append('lat', liveLocation.lat.toString());
+      formData.append('lng', liveLocation.lng.toString());
+      formData.append('address', liveLocation.address);
+      formData.append('locationSource', 'GPS');
+      if (liveLocation.accuracyMeters !== undefined) {
+        formData.append('accuracyMeters', liveLocation.accuracyMeters.toString());
+      }
+      if (liveLocation.capturedAt) formData.append('capturedAt', liveLocation.capturedAt);
+      formData.append('reporterName', isAnonymous ? 'Anonymous Citizen' : 'Arfa Altaf');
       formData.append('reporterPhone', isAnonymous ? '' : '+1 (555) 019-2834');
       formData.append('isAnonymous', isAnonymous ? 'true' : 'false');
       if (mediaFile) formData.append('media', mediaFile);
@@ -103,8 +147,8 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
       const created = await api.createIncident(formData);
       soundAlerts.playChime();
       onIncidentSubmitted(created);
-    } catch (err: any) {
-      alert('Failed to submit report: ' + err.message);
+    } catch (error: unknown) {
+      alert('Report not submitted: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsSubmitting(false);
     }
@@ -133,17 +177,22 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
 
           {mediaPreview ? (
             <div className="relative rounded-2xl overflow-hidden mb-2 border border-purple-100 shadow-inner">
-              <img src={mediaPreview} alt="Incident Preview" className="w-full h-44 object-cover" />
+              {mediaFile?.type.startsWith('video/') ? (
+                <video src={mediaPreview} className="w-full h-44 object-cover" controls />
+              ) : (
+                <img src={mediaPreview} alt="Incident Preview" className="w-full h-44 object-cover" />
+              )}
               <button
                 type="button"
                 onClick={() => {
                   setMediaFile(null);
                   setMediaPreview(null);
                   setAiPreview(null);
+                  if (fileInputRef.current) fileInputRef.current.value = '';
                 }}
                 className="absolute top-2 right-2 bg-black/70 hover:bg-black text-white text-xs px-2.5 py-1 rounded-full backdrop-blur-sm"
               >
-                Change Photo
+                Change Media
               </button>
             </div>
           ) : (
@@ -252,48 +301,47 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
           />
         </div>
 
-        {/* Location Pin Card */}
+        {/* Live GPS Card */}
         <div className="bg-white rounded-3xl p-4 shadow-sm">
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs font-bold text-[#1E1B4B]">
-              4. Incident Location
+              4. Live GPS Location
             </label>
-            <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={async () => {
-                  const live = await locationService.getCurrentLocation();
-                  setSelectedLocation(live);
-                }}
-                className="text-[11px] bg-purple-50 text-[#5E43F3] px-2 py-0.5 rounded-lg font-bold hover:bg-purple-100 flex items-center space-x-1 active:scale-95 transition-all"
-              >
-                <span>📍 Live GPS</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowMapPicker(!showMapPicker)}
-                className="text-[11px] text-[#5E43F3] font-bold hover:underline"
-              >
-                {showMapPicker ? 'Hide Map' : 'Adjust Pin'}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => void refreshAccurateLocation().catch(() => undefined)}
+              disabled={isLocating}
+              className="text-[11px] bg-purple-50 text-[#5E43F3] px-2 py-0.5 rounded-lg font-bold hover:bg-purple-100 flex items-center space-x-1 active:scale-95 transition-all disabled:opacity-60"
+            >
+              <span>{isLocating ? 'Acquiring GPS…' : 'Refresh Precise GPS'}</span>
+            </button>
           </div>
 
           <div className="flex items-center space-x-2 bg-[#F4F3FA] p-2.5 rounded-xl text-xs text-[#1E1B4B] mb-2">
             <MapPin size={16} className="text-[#5E43F3] flex-shrink-0" />
-            <span className="truncate font-medium">{selectedLocation.address}</span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate font-medium">{selectedLocation.address}</div>
+              {selectedLocation.source === 'GPS' && selectedLocation.accuracyMeters !== undefined && (
+                <div className="mt-0.5 text-[10px] font-bold text-emerald-600">
+                  Live GPS · accurate to approximately {selectedLocation.accuracyMeters} m
+                </div>
+              )}
+            </div>
           </div>
 
-          {showMapPicker && (
-            <div className="h-36 rounded-xl overflow-hidden border border-gray-100 mb-2">
-              <InteractiveMap
-                selectedLocation={selectedLocation}
-                onLocationSelect={(loc) => setSelectedLocation(loc)}
-                height="144px"
-                isPicker
-              />
+          {locationError && (
+            <div className="mb-2 rounded-xl bg-red-50 px-3 py-2 text-[10px] font-semibold text-red-700">
+              {locationError}
             </div>
           )}
+
+          <div className="h-36 rounded-xl overflow-hidden border border-gray-100 mb-2">
+            <InteractiveMap selectedLocation={selectedLocation} height="144px" />
+          </div>
+
+          <p className="text-[10px] leading-relaxed text-gray-500">
+            A fresh device GPS fix, its accuracy, and capture time will be sent to the authority when you submit.
+          </p>
         </div>
 
         {/* Anonymous Toggle */}
@@ -319,7 +367,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
           className="w-full bg-[#5E43F3] hover:bg-[#4E33EC] active:scale-[0.98] transition-all text-white font-semibold py-4 px-6 rounded-full flex items-center justify-between shadow-lg shadow-purple-500/25 cursor-pointer disabled:opacity-50"
         >
           <span className="text-sm font-bold pl-2">
-            {isSubmitting ? 'Routing to Emergency Authorities...' : 'Submit Incident Report'}
+            {isSubmitting ? 'Confirming GPS & Routing...' : 'Submit Incident Report'}
           </span>
           <div className="w-10 h-10 rounded-full bg-white text-[#5E43F3] flex items-center justify-center shadow-md">
             {isSubmitting ? (

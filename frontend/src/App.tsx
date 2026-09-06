@@ -1,21 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { 
   Smartphone, 
   Monitor, 
   RefreshCw, 
   Flame, 
   Car, 
-  Building, 
-  Sparkles, 
-  AlertOctagon, 
-  ShieldCheck,
-  CheckCircle2,
-  Info
+  Building
 } from 'lucide-react';
 import { Incident, DashboardStats, LocationData } from './types';
 import { api } from './services/api';
 import { soundAlerts } from './utils/audioAlert';
-import { MobileFrame } from './components/common/MobileFrame';
+import { MobileFrame, type MobileTab } from './components/common/MobileFrame';
 import { OnboardingScreen } from './components/citizen/OnboardingScreen';
 import { HomeScreen } from './components/citizen/HomeScreen';
 import { ActiveSosScreen } from './components/citizen/ActiveSosScreen';
@@ -24,7 +19,7 @@ import { IncidentTrackerScreen } from './components/citizen/IncidentTrackerScree
 import { CommunityAlertsScreen } from './components/citizen/CommunityAlertsScreen';
 import { AuthorityDashboard } from './components/authority/AuthorityDashboard';
 
-import { locationService } from './services/locationService';
+import { isFreshLiveLocation, locationService } from './services/locationService';
 
 type CitizenScreen = 'ONBOARDING' | 'HOME' | 'ACTIVE_SOS' | 'REPORT' | 'TRACKING' | 'ALERTS';
 type ViewRole = 'CITIZEN' | 'AUTHORITY' | 'SPLIT_VIEW';
@@ -32,36 +27,35 @@ type ViewRole = 'CITIZEN' | 'AUTHORITY' | 'SPLIT_VIEW';
 export function App() {
   const [role, setRole] = useState<ViewRole>('CITIZEN');
   const [citizenScreen, setCitizenScreen] = useState<CitizenScreen>('ONBOARDING');
-  const [bottomTab, setBottomTab] = useState<'home' | 'report' | 'alerts' | 'profile'>('home');
+  const [bottomTab, setBottomTab] = useState<MobileTab>('home');
   
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isGpsLoading, setIsGpsLoading] = useState(false);
 
   // Live GPS Location of the user
   const [userLocation, setUserLocation] = useState<LocationData>({
     lat: 40.7128,
     lng: -74.0060,
-    address: 'Fetching live GPS...',
+    address: 'Waiting for precise GPS location',
+    capturedAt: new Date().toISOString(),
+    source: 'FALLBACK',
   });
 
   // Fetch real live GPS location on startup & watch
-  const refreshLiveLocation = async () => {
-    setIsGpsLoading(true);
+  const refreshLiveLocation = useCallback(async () => {
     try {
       const loc = await locationService.getCurrentLocation();
       setUserLocation(loc);
     } catch (e) {
       console.warn('Error fetching live location:', e);
-    } finally {
-      setIsGpsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    refreshLiveLocation();
+    // The effect intentionally starts synchronization with external GPS state.
+    // oxlint-disable-next-line react/set-state-in-effect
+    void refreshLiveLocation();
     const watchId = locationService.watchLiveLocation((loc) => {
       setUserLocation(loc);
     });
@@ -69,69 +63,84 @@ export function App() {
     return () => {
       locationService.clearWatch(watchId);
     };
-  }, []);
+  }, [refreshLiveLocation]);
 
   // Load incidents & stats
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [list, s] = await Promise.all([api.getIncidents(), api.getStats()]);
       setIncidents(list);
       setStats(s);
 
       // Keep selected incident updated in real-time
-      if (selectedIncident) {
-        const found = list.find(i => i.id === selectedIncident.id);
-        if (found) setSelectedIncident(found);
-      }
+      setSelectedIncident((current) => {
+        if (!current) return current;
+        return list.find((incident) => incident.id === current.id) ?? current;
+      });
     } catch (err) {
       console.error('Failed loading incidents', err);
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 4000); // 4-sec real-time polling
+    // The effect intentionally starts synchronization with the API.
+    // oxlint-disable-next-line react/set-state-in-effect
+    void loadData();
+    const interval = window.setInterval(() => void loadData(), 4000); // 4-sec real-time polling
     return () => clearInterval(interval);
-  }, [selectedIncident?.id]);
+  }, [loadData]);
 
   // SOS Quick Trigger
   const handleTriggerSos = async () => {
     try {
+      const liveLocation = isFreshLiveLocation(userLocation)
+        ? userLocation
+        : await locationService.getAccurateCurrentLocation();
+      setUserLocation(liveLocation);
+
       const formData = new FormData();
       formData.append('title', 'CRITICAL EMERGENCY SOS TRIGGERED');
       formData.append('description', 'Citizen pressed instant SOS emergency button. Urgent dispatch needed.');
       formData.append('categoryHint', 'FIRE');
-      formData.append('lat', userLocation.lat.toString());
-      formData.append('lng', userLocation.lng.toString());
-      formData.append('address', userLocation.address);
-      formData.append('reporterName', 'Olivia Smith');
+      formData.append('lat', liveLocation.lat.toString());
+      formData.append('lng', liveLocation.lng.toString());
+      formData.append('address', liveLocation.address);
+      formData.append('locationSource', 'GPS');
+      if (liveLocation.accuracyMeters !== undefined) {
+        formData.append('accuracyMeters', liveLocation.accuracyMeters.toString());
+      }
+      if (liveLocation.capturedAt) formData.append('capturedAt', liveLocation.capturedAt);
+      formData.append('reporterName', 'Arfa Altaf');
       formData.append('reporterPhone', '+1 (555) 019-2834');
       formData.append('isEmergencySOS', 'true');
 
       const created = await api.createIncident(formData);
       setSelectedIncident(created);
       setCitizenScreen('ACTIVE_SOS');
-      loadData();
+      void loadData();
     } catch (err) {
       console.error('SOS Trigger Error', err);
-      setCitizenScreen('ACTIVE_SOS');
+      alert(err instanceof Error ? err.message : 'Unable to acquire your live GPS location.');
     }
   };
 
   const handleIncidentSubmitted = (created: Incident) => {
     setSelectedIncident(created);
     setCitizenScreen('TRACKING');
-    loadData();
+    void loadData();
   };
 
-  const handleBottomTabChange = (tab: 'home' | 'report' | 'alerts' | 'profile') => {
+  const handleBottomTabChange = (tab: MobileTab) => {
     setBottomTab(tab);
     if (tab === 'home') setCitizenScreen('HOME');
     else if (tab === 'report') setCitizenScreen('REPORT');
     else if (tab === 'alerts') setCitizenScreen('ALERTS');
-    else if (tab === 'profile') setCitizenScreen('ACTIVE_SOS');
+    else if (tab === 'sos') void handleTriggerSos();
+  };
+
+  const handleExitSos = () => {
+    setCitizenScreen('HOME');
+    setBottomTab('home');
   };
 
   // Quick Demo Simulator
@@ -164,7 +173,7 @@ export function App() {
     const created = await api.createIncident(formData);
     soundAlerts.playEmergencySiren();
     setSelectedIncident(created);
-    loadData();
+    void loadData();
   };
 
   return (
@@ -172,9 +181,11 @@ export function App() {
       {/* Universal Top Ecosystem Control Bar */}
       <nav className="bg-[#1E1B4B] text-white px-4 py-2.5 flex flex-wrap items-center justify-between shadow-lg z-50">
         <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#5E43F3] to-[#8F77FB] flex items-center justify-center font-black text-sm shadow-md">
-            RR
-          </div>
+          <img
+            src="/rapidresq-logo-transparent.png"
+            alt="RapidResQ Disaster Management App"
+            className="h-11 w-11 object-contain drop-shadow-md"
+          />
           <span className="text-sm font-extrabold tracking-wide text-white">RapidResQ</span>
         </div>
 
@@ -247,7 +258,7 @@ export function App() {
           <button
             onClick={async () => {
               await api.resetSeed();
-              loadData();
+              void loadData();
             }}
             className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 ml-2"
             title="Reset to initial seed"
@@ -286,8 +297,8 @@ export function App() {
               {citizenScreen === 'ACTIVE_SOS' && (
                 <ActiveSosScreen
                   userLocation={userLocation}
-                  onBack={() => setCitizenScreen('HOME')}
-                  onCancelSos={() => setCitizenScreen('HOME')}
+                  onBack={handleExitSos}
+                  onCancelSos={handleExitSos}
                 />
               )}
               {citizenScreen === 'REPORT' && (
@@ -325,7 +336,7 @@ export function App() {
               onRefresh={loadData}
               onUpdateIncident={(updated) => {
                 setSelectedIncident(updated);
-                loadData();
+                void loadData();
               }}
             />
           </div>
@@ -360,8 +371,8 @@ export function App() {
                 {citizenScreen === 'ACTIVE_SOS' && (
                   <ActiveSosScreen
                     userLocation={userLocation}
-                    onBack={() => setCitizenScreen('HOME')}
-                    onCancelSos={() => setCitizenScreen('HOME')}
+                    onBack={handleExitSos}
+                    onCancelSos={handleExitSos}
                   />
                 )}
                 {citizenScreen === 'REPORT' && (
@@ -398,7 +409,7 @@ export function App() {
                 onRefresh={loadData}
                 onUpdateIncident={(updated) => {
                   setSelectedIncident(updated);
-                  loadData();
+                  void loadData();
                 }}
               />
             </div>

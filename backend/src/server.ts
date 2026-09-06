@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import path from 'path';
+import os from 'os';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
@@ -16,6 +17,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const isVercel = Boolean(process.env.VERCEL);
 const configuredPort = Number.parseInt(process.env.PORT || '', 10);
 const PORT = Number.isInteger(configuredPort) && configuredPort > 0 ? configuredPort : 5000;
 const validStatuses = new Set<IncidentStatus>(['PENDING', 'ACKNOWLEDGED', 'IN_PROGRESS', 'RESOLVED']);
@@ -61,8 +63,11 @@ const parseTimestamp = (value: unknown) => {
   return Number.isNaN(timestamp.getTime()) ? undefined : timestamp.toISOString();
 };
 
-// Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, '../uploads');
+// Vercel Functions have a read-only deployment filesystem; /tmp is writable for
+// transient uploads. Local development keeps uploads inside the backend folder.
+const uploadsDir = isVercel
+  ? path.join(os.tmpdir(), 'rapidresq-uploads')
+  : path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -358,6 +363,10 @@ if (fs.existsSync(frontendDist)) {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`🚀 RapidResQ Incident & Dispatch Backend running on http://localhost:${PORT}`);
-});
+if (!isVercel) {
+  app.listen(PORT, () => {
+    console.log(`RapidResQ Incident & Dispatch Backend running on http://localhost:${PORT}`);
+  });
+}
+
+export default app;

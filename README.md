@@ -128,3 +128,21 @@ FIREBASE_PROJECT_ID=your_firebase_project_id
 ```
 
 When hosting the frontend and API on different origins, copy `frontend/.env.example` to `frontend/.env` and set `VITE_API_BASE_URL` to the backend origin before building. It is not needed for the default development or production setup.
+
+---
+
+## Deploy to Vercel
+
+This repository includes `vercel.json` and a serverless Express entrypoint, so the
+Vite frontend and `/api/*` routes deploy together from the repository root.
+
+1. Import the repository into Vercel and leave **Root Directory** as `.`.
+2. Vercel uses the checked-in build command and `frontend/dist` output directory.
+3. Deploy over HTTPS and allow precise location access when prompted.
+
+No environment variable is required for the built-in triage simulation. Add
+`GEMINI_API_KEY` in Vercel project settings only when enabling Gemini.
+
+The bundled incident store and uploaded files are intended for demonstrations:
+serverless instances can restart and temporary files can expire. Connect a durable
+database and object storage before using this as a production authority system.

@@ -1,0 +1,109 @@
+# 🛡️ RapidResQ: AI-Powered Emergency & Civic Incident Reporting Ecosystem
+
+An intelligent, real-time emergency triage and incident dispatch platform designed with a modern, high-fidelity UI/UX (matching the custom violet/coral SOS design language).
+
+---
+
+## 🌟 Key Features & Workflow
+
+```
+1. Citizen Reports (Photo/Video + Live Location Pin)
+       │
+       ▼
+2. Real-time Backend / Firebase Storage
+       │
+       ▼
+3. Google Gemini AI Engine (Multimodal Visual Triage & Severity Rating)
+       │
+       ▼
+4. Smart Department Routing
+   ├── 🔥 Fire & Rescue Department
+   ├── 🚑 Emergency Medical Services (EMS)
+   ├── 🚓 Police & Security Dispatch
+   └── 🏛️ Municipal Corporation / Public Works
+       │
+       ▼
+5. Authority Command Center (Live Interactive Map, Instant Audio Siren, 1-Click Unit Dispatch)
+       │
+       ▼
+6. Citizen Live Status Pipeline (Pending ➔ Acknowledged ➔ In Progress ➔ Resolved)
+```
+
+---
+
+## 📱 Mobile App Screens (Citizen Portal)
+
+1. **Screen 1 (Onboarding / Splash)**:
+   - 3D Neumorphic Purple SOS Shield with floating status beacons
+   - *"Help is Just a Tap Away"* title with gradient pill button
+2. **Screen 2 (Home Dashboard)**:
+   - Welcome banner with user profile avatar
+   - Coral-Red Hero Emergency SOS Box with pulsating beacon
+   - 4-Grid Quick Actions: *Emergency Fake Call*, *Share Location*, *Safety Timer (SafeWalk)*, *Voice Record*
+   - Safety Tips Carousel
+   - Recent Alerts List & Live Incident Feeds
+   - Curved Floating Bottom Navigation Bar
+3. **Screen 3 (Active SOS Mode)**:
+   - Real-time SOS beacon with vibrating sound/visual siren
+   - Live location sharing card with interactive mini-map
+   - One-tap dial emergency contacts & dispatchers
+4. **Screen 4 (Incident Reporting Flow)**:
+   - Camera photo/video upload with live preview
+   - Live AI Triage Assistant with instant hazard classification & priority detection
+   - Category chips (Fire, Accident, Civic/Pothole, Crime)
+   - Interactive Leaflet Map Pin Picker
+   - Anonymous reporting toggle
+5. **Screen 5 (Live Resolution Tracker)**:
+   - Real-time resolution progress bar: `Pending Triage` ➔ `Acknowledged` ➔ `In Progress` ➔ `Resolved`
+   - Assigned first responder badge & estimated arrival time (ETA)
+   - Live audit timeline with responder notes and photo proof of resolution
+
+---
+
+## 🖥️ Authority Command Center
+
+- **Tactical OpenStreetMap**: Live clustered incident pins color-coded by department & urgency.
+- **Department Queue Switcher**: Dedicated filtered tabs for *Fire*, *Police*, *EMS*, and *Municipality*.
+- **Incident Inspector**: Media inspection, AI confidence score, AI reasoning summary, and keyword extraction.
+- **1-Click Dispatch & Triage**: Assign responder units (e.g., Engine 14, Medic 07), set ETAs, write status updates, and upload resolution proof.
+- **Synthesized Web Audio Alerts**: Authentic emergency siren synthesizer and update chimes.
+
+---
+
+## 🚀 Quick Start Guide
+
+### 1. Prerequisites
+- **Node.js** v18+ (v24 tested)
+- **npm** v10+
+
+### 2. Run Both Frontend & Backend Concurrently
+From the root directory:
+
+```bash
+# In the safecity-incident-system directory
+npm run dev:backend   # Starts API server on http://localhost:5000
+npm run dev:frontend  # Starts Frontend UI on http://localhost:3000
+```
+
+### 3. Open in Browser
+Open **`http://localhost:3000`** in your browser.
+
+- Use the top navigation bar to toggle between **📱 Citizen Mobile App**, **🖥️ Authority Command Center**, or **📱 ↔ 🖥️ Live Split Demo**.
+- Click the simulation buttons (**Fire**, **Accident**, **Civic**) to test instant emergency injections.
+
+---
+
+## ⚙️ Configuration (.env)
+
+The app works **100% out of the box** with built-in realistic simulation fallbacks. If you want to connect real cloud services:
+
+In `backend/.env`:
+```env
+PORT=5000
+
+# Optional: Google Gemini API Key for deep multimodal visual triage
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Optional: Firebase Project Credentials
+FIREBASE_PROJECT_ID=your_firebase_project_id
+```

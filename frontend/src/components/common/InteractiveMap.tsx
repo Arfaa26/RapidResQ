@@ -7,6 +7,7 @@ interface InteractiveMapProps {
   incidents?: Incident[];
   selectedLocation?: LocationData | null;
   onLocationSelect?: (loc: LocationData) => void;
+  onIncidentSelect?: (incident: Incident) => void;
   center?: [number, number];
   zoom?: number;
   height?: string;
@@ -28,6 +29,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   incidents = EMPTY_INCIDENTS,
   selectedLocation,
   onLocationSelect,
+  onIncidentSelect,
   center = DEFAULT_CENTER,
   zoom = 13,
   height = '350px',
@@ -37,12 +39,17 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
   const onLocationSelectRef = useRef(onLocationSelect);
+  const onIncidentSelectRef = useRef(onIncidentSelect);
   const lastSelectedCoordinates = useRef<string | null>(null);
   const [centerLat, centerLng] = center;
 
   useEffect(() => {
     onLocationSelectRef.current = onLocationSelect;
   }, [onLocationSelect]);
+
+  useEffect(() => {
+    onIncidentSelectRef.current = onIncidentSelect;
+  }, [onIncidentSelect]);
 
   useEffect(() => {
     if (!mapContainerRef.current) return;
@@ -73,7 +80,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       }
     }
 
+    const resizeObserver = new ResizeObserver(() => mapInstanceRef.current?.invalidateSize());
+    resizeObserver.observe(mapContainerRef.current);
     return () => {
+      resizeObserver.disconnect();
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -172,7 +182,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         iconAnchor: [18, 18],
       });
 
-      const marker = L.marker([inc.location.lat, inc.location.lng], { icon });
+      const marker = L.marker([inc.location.lat, inc.location.lng], {
+        icon,
+        title: `Open alert ${inc.id}: ${inc.title}`,
+        alt: `Open alert ${inc.id}: ${inc.title}`,
+      });
+      marker.on('click', () => onIncidentSelectRef.current?.(inc));
       marker.bindPopup(`
         <div style="font-family: inherit; min-width: 180px;">
           <div style="font-weight: 700; font-size: 14px; color: #1E1B4B; margin-bottom: 4px;">${escapeHtml(inc.title)}</div>

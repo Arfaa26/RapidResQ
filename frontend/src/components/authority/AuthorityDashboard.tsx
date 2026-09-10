@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { 
   ShieldAlert, 
   Flame, 
@@ -12,7 +12,9 @@ import {
   Sparkles, 
   MapPin,
   Phone,
-  User
+  User,
+  X,
+  ArrowRight
 } from 'lucide-react';
 import { Incident, IncidentStatus, DashboardStats } from '../../types';
 import { InteractiveMap } from '../common/InteractiveMap';
@@ -36,6 +38,9 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const detailsDialogRef = useRef<HTMLDialogElement>(null);
+  const detailsTitleId = useId();
   const [isMuted, setIsMuted] = useState(true);
   const seenIncidentIds = useRef<Set<string> | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -75,11 +80,26 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
     return true;
   });
 
-  // Incident data arrives asynchronously. Keep selection by ID so the first
-  // incident is available immediately after loading and refreshes stay current.
-  const selectedIncident = filteredIncidents.find((inc) => inc.id === selectedIncidentId)
-    ?? filteredIncidents[0]
-    ?? null;
+  // Keep the opened report selected even when an update removes it from a filter.
+  const selectedIncident = incidents.find((inc) => inc.id === selectedIncidentId) ?? null;
+
+  const openIncident = (incident: Incident) => {
+    setSelectedIncidentId(incident.id);
+    setDispatcherNote('');
+    setAssignedUnitName(incident.assignedUnit?.name || '');
+    setAssignedUnitBadge(incident.assignedUnit?.badge || '');
+    setEtaInput(String(incident.assignedUnit?.etaMinutes || 5));
+    setProofFile(null);
+    setIsDetailsOpen(true);
+  };
+
+  useEffect(() => {
+    if (!isDetailsOpen) return;
+    const dialog = detailsDialogRef.current;
+    if (!dialog) return;
+    dialog.showModal();
+    return () => { if (dialog.open) dialog.close(); };
+  }, [isDetailsOpen]);
 
   const criticalCount = stats?.criticalActive
     ?? incidents.filter(i => i.priority === 'CRITICAL' && i.status !== 'RESOLVED').length;
@@ -122,7 +142,7 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
   return (
     <div className="min-h-screen bg-[#0F172A] text-slate-100 flex flex-col font-sans">
       {/* 1. Top Command Bar */}
-      <header className="bg-[#1E293B] border-b border-slate-700/80 px-6 py-3.5 flex items-center justify-between shadow-md">
+      <header className="bg-[#1E293B] border-b border-slate-700/80 px-6 py-3.5 flex flex-wrap gap-3 items-center justify-between shadow-md">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#5E43F3] to-[#8F77FB] flex items-center justify-center text-white shadow-lg shadow-purple-500/20">
             <Radio size={20} className="animate-pulse" />
@@ -173,8 +193,8 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
       </header>
 
       {/* 2. Department Filter Navigation Bar */}
-      <div className="bg-[#1E293B]/70 border-b border-slate-800 px-6 py-2.5 flex items-center justify-between overflow-x-auto">
-        <div className="flex space-x-2">
+      <div className="bg-[#1E293B]/70 border-b border-slate-800 px-4 py-2.5 flex flex-col gap-3">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {departments.map((dept) => {
             const count = dept.id === 'ALL'
               ? incidents.length
@@ -201,7 +221,7 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
         </div>
 
         {/* Status Filter */}
-        <div className="flex items-center space-x-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="text-slate-400 font-medium">Status:</span>
           {['ALL', 'PENDING', 'ACKNOWLEDGED', 'IN_PROGRESS', 'RESOLVED'].map((st) => (
             <button
@@ -220,9 +240,9 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
       </div>
 
       {/* 3. Main Dashboard Workspace (3-Column Layout) */}
-      <div className="flex-1 grid grid-cols-12 gap-4 p-4 overflow-hidden">
+      <div className="flex-1 grid grid-cols-12 items-start gap-4 p-4">
         {/* Left Column: Live Incidents Feed (4 Columns) */}
-        <div className="col-span-12 lg:col-span-4 flex flex-col space-y-3 overflow-y-auto max-h-[calc(100vh-140px)] pr-1">
+        <div className="col-span-12 lg:col-span-4 min-w-0 flex flex-col space-y-3 lg:overflow-y-auto lg:max-h-[calc(100vh-240px)] pr-1">
           <div className="flex items-center justify-between px-1">
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
               Incoming Incidents ({filteredIncidents.length})
@@ -239,10 +259,13 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
               const isCritical = inc.priority === 'CRITICAL' && inc.status !== 'RESOLVED';
 
               return (
-                <div
+                <button
                   key={inc.id}
-                  onClick={() => setSelectedIncidentId(inc.id)}
-                  className={`bg-slate-800/90 rounded-2xl p-4 border transition-all cursor-pointer relative ${
+                  type="button"
+                  aria-label={`Open alert ${inc.id}: ${inc.title}`}
+                  aria-haspopup="dialog"
+                  onClick={() => openIncident(inc)}
+                  className={`w-full text-left shrink-0 focus-visible:outline-2 focus-visible:outline-purple-400 bg-slate-800/90 rounded-2xl p-4 border transition-all cursor-pointer relative ${
                     isSelected
                       ? 'border-[#5E43F3] shadow-lg shadow-purple-500/10 ring-1 ring-[#5E43F3]'
                       : 'border-slate-700/60 hover:border-slate-600'
@@ -283,14 +306,17 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
                     </div>
                     <span>{new Date(inc.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
-                </div>
+                  <span className="mt-3 flex items-center gap-1 text-xs font-bold text-purple-300">
+                    Open report <ArrowRight size={14} />
+                  </span>
+                </button>
               );
             })
           )}
         </div>
 
         {/* Center / Right: Interactive Map & Triage Inspector (8 Columns) */}
-        <div className="col-span-12 lg:col-span-8 flex flex-col space-y-4 max-h-[calc(100vh-140px)] overflow-y-auto pr-1">
+        <div className="col-span-12 lg:col-span-8 min-w-0 flex flex-col space-y-4">
           {/* Top Interactive Tactical Map */}
           <div className="bg-slate-800/90 rounded-2xl p-3 border border-slate-700 shadow-md">
             <div className="flex items-center justify-between mb-2 px-1">
@@ -298,33 +324,54 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
                 <span>Tactical Geographic Map</span>
                 <span className="text-[10px] text-slate-400">• Click markers for triage info</span>
               </div>
-              {selectedIncident && (
-                <span className="text-[11px] font-mono text-purple-400 font-bold">
-                  Tracking: {selectedIncident.id}
-                </span>
-              )}
+
             </div>
             <div className="h-56 rounded-xl overflow-hidden">
               <InteractiveMap
                 incidents={filteredIncidents}
-                selectedLocation={selectedIncident?.location}
+                onIncidentSelect={openIncident}
                 height="224px"
                 zoom={13}
               />
             </div>
           </div>
 
+        </div>
+      </div>
+
+      <dialog
+        ref={detailsDialogRef}
+        aria-labelledby={detailsTitleId}
+        onClose={() => setIsDetailsOpen(false)}
+        onCancel={(event) => { if (isUpdating) event.preventDefault(); }}
+        className="m-auto w-[calc(100%-1rem)] max-w-4xl max-h-[92dvh] rounded-2xl border border-slate-600 bg-slate-900 p-0 text-slate-100 shadow-2xl backdrop:bg-black/70"
+      >
+        {isDetailsOpen && (
+          <>
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-700 bg-slate-900 px-4 py-3">
+              <h2 id={detailsTitleId} className="text-base font-bold">Reported Alert Details</h2>
+              <button
+                type="button"
+                aria-label="Close alert details"
+                disabled={isUpdating}
+                onClick={() => setIsDetailsOpen(false)}
+                className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-sm hover:bg-slate-700 disabled:opacity-50"
+              >
+                <X size={18} /> Close
+              </button>
+            </div>
+            <div className="p-3 sm:p-4">
           {/* Selected Incident Triage Details Console */}
           {selectedIncident ? (
             <div className="bg-slate-800/90 rounded-2xl p-5 border border-slate-700 shadow-lg space-y-4">
               {/* Header */}
-              <div className="flex items-start justify-between border-b border-slate-700/70 pb-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between border-b border-slate-700/70 pb-3">
                 <div>
-                  <div className="flex items-center space-x-2 mb-1">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
                     <span className="text-sm font-black text-white">{selectedIncident.title}</span>
                     <span className="text-xs font-mono text-slate-400">({selectedIncident.id})</span>
                   </div>
-                  <div className="flex items-center space-x-3 text-xs text-slate-300">
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
                     <span className="flex items-center space-x-1">
                       <User size={14} className="text-purple-400" />
                       <span>Reporter: {selectedIncident.reportedBy.name}</span>
@@ -347,6 +394,87 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
                   </div>
                 </div>
               </div>
+
+              <section aria-label="Report description" className="rounded-xl bg-slate-900 p-3">
+                <h3 className="mb-2 text-xs font-bold text-slate-300">Reported Message</h3>
+                <p className="whitespace-pre-wrap break-words text-sm text-white">{selectedIncident.description}</p>
+              </section>
+
+              {/* Dispatch Action Panel */}
+              <div className="bg-slate-900/80 border border-slate-700 rounded-xl p-4 space-y-3">
+                <div className="text-xs font-bold text-white flex items-center justify-between">
+                  <span>Dispatch & Status Triage Workflow</span>
+                  <span className="text-[11px] text-slate-400">
+                    Current: <b className="text-purple-400">{selectedIncident.status}</b>
+                  </span>
+                </div>
+
+                {/* Dispatch Unit Assignment inputs */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    placeholder="Unit Name (e.g. Engine 14)"
+                    value={assignedUnitName}
+                    onChange={(e) => setAssignedUnitName(e.target.value)}
+                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Badge ID (e.g. FDNY-E14)"
+                    value={assignedUnitBadge}
+                    onChange={(e) => setAssignedUnitBadge(e.target.value)}
+                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                  />
+                  <input
+                    type="number"
+                    placeholder="ETA (Minutes)"
+                    value={etaInput}
+                    min="1"
+                    onChange={(e) => setEtaInput(e.target.value)}
+                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+
+                <input
+                  type="text"
+                  placeholder="Dispatcher Operational Note (logged to citizen timeline)..."
+                  value={dispatcherNote}
+                  onChange={(e) => setDispatcherNote(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                />
+
+                {/* Status action buttons */}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    disabled={isUpdating || selectedIncident.status === 'ACKNOWLEDGED'}
+                    onClick={() => handleStatusChange('ACKNOWLEDGED')}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-bold py-2.5 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1 cursor-pointer"
+                  >
+                    <CheckCircle2 size={14} />
+                    <span>Acknowledge & Dispatch</span>
+                  </button>
+
+                  <button
+                    disabled={isUpdating || selectedIncident.status === 'IN_PROGRESS'}
+                    onClick={() => handleStatusChange('IN_PROGRESS')}
+                    className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white text-xs font-bold py-2.5 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1 cursor-pointer"
+                  >
+                    <Truck size={14} />
+                    <span>Mark On Scene / In Progress</span>
+                  </button>
+
+                  <button
+                    disabled={isUpdating || selectedIncident.status === 'RESOLVED'}
+                    onClick={() => handleStatusChange('RESOLVED')}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-bold py-2.5 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1 cursor-pointer"
+                  >
+                    <CheckCircle2 size={14} />
+                    <span>Resolve Incident</span>
+                  </button>
+                </div>
+              </div>
+
+              <InteractiveMap selectedLocation={selectedIncident.location} height="224px" />
 
               {/* Reporter GPS telemetry */}
               <div className="flex flex-col gap-2 rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -443,87 +571,17 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Dispatch Action Panel */}
-              <div className="bg-slate-900/80 border border-slate-700 rounded-xl p-4 space-y-3">
-                <div className="text-xs font-bold text-white flex items-center justify-between">
-                  <span>Dispatch & Status Triage Workflow</span>
-                  <span className="text-[11px] text-slate-400">
-                    Current: <b className="text-purple-400">{selectedIncident.status}</b>
-                  </span>
-                </div>
 
-                {/* Dispatch Unit Assignment inputs */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Unit Name (e.g. Engine 14)"
-                    value={assignedUnitName}
-                    onChange={(e) => setAssignedUnitName(e.target.value)}
-                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Badge ID (e.g. FDNY-E14)"
-                    value={assignedUnitBadge}
-                    onChange={(e) => setAssignedUnitBadge(e.target.value)}
-                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
-                  />
-                  <input
-                    type="number"
-                    placeholder="ETA (Minutes)"
-                    value={etaInput}
-                    min="1"
-                    onChange={(e) => setEtaInput(e.target.value)}
-                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
-                  />
-                </div>
-
-                <input
-                  type="text"
-                  placeholder="Dispatcher Operational Note (logged to citizen timeline)..."
-                  value={dispatcherNote}
-                  onChange={(e) => setDispatcherNote(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
-                />
-
-                {/* Status action buttons */}
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <button
-                    disabled={isUpdating || selectedIncident.status === 'ACKNOWLEDGED'}
-                    onClick={() => handleStatusChange('ACKNOWLEDGED')}
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-bold py-2.5 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1 cursor-pointer"
-                  >
-                    <CheckCircle2 size={14} />
-                    <span>Acknowledge & Dispatch</span>
-                  </button>
-
-                  <button
-                    disabled={isUpdating || selectedIncident.status === 'IN_PROGRESS'}
-                    onClick={() => handleStatusChange('IN_PROGRESS')}
-                    className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white text-xs font-bold py-2.5 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1 cursor-pointer"
-                  >
-                    <Truck size={14} />
-                    <span>Mark On Scene / In Progress</span>
-                  </button>
-
-                  <button
-                    disabled={isUpdating || selectedIncident.status === 'RESOLVED'}
-                    onClick={() => handleStatusChange('RESOLVED')}
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-bold py-2.5 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1 cursor-pointer"
-                  >
-                    <CheckCircle2 size={14} />
-                    <span>Resolve Incident</span>
-                  </button>
-                </div>
-              </div>
             </div>
           ) : (
             <div className="bg-slate-800 rounded-2xl p-12 text-center text-slate-400">
               Select an incident from the feed to inspect and dispatch.
             </div>
           )}
-        </div>
-      </div>
+            </div>
+          </>
+        )}
+      </dialog>
     </div>
   );
 };

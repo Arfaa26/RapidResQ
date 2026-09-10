@@ -15,7 +15,7 @@ import { Incident, LocationData, AIAnalysisResult, IncidentCategory } from '../.
 import { api } from '../../services/api';
 import { InteractiveMap } from '../common/InteractiveMap';
 import { soundAlerts } from '../../utils/audioAlert';
-import { locationService } from '../../services/locationService';
+import { isFreshLiveLocation, locationService } from '../../services/locationService';
 
 interface ReportIncidentScreenProps {
   onBack: () => void;
@@ -31,30 +31,32 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<IncidentCategory>('CIVIC');
-  const [selectedLocation, setSelectedLocation] = useState<LocationData>(currentLocation);
+  const [acquiredLocation, setAcquiredLocation] = useState<LocationData>(currentLocation);
+  const selectedLocation = Date.parse(currentLocation.capturedAt || '') >= Date.parse(acquiredLocation.capturedAt || '')
+    ? currentLocation : acquiredLocation;
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
-  const [isAnonymous, setIsAnonymous] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiPreview, setAiPreview] = useState<AIAnalysisResult | null>(null);
   const [isAnalyzingAi, setIsAnalyzingAi] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const locationRequestRef = useRef<Promise<LocationData> | null>(null);
 
-  const refreshAccurateLocation = useCallback(async (): Promise<LocationData> => {
+  const refreshAccurateLocation = useCallback(async (forceRefresh = false): Promise<LocationData> => {
     if (locationRequestRef.current) return locationRequestRef.current;
 
     setIsLocating(true);
     setLocationError(null);
-    const request = locationService.getAccurateCurrentLocation();
+    const request = locationService.getAccurateCurrentLocation({ forceRefresh });
     locationRequestRef.current = request;
 
     try {
       const liveLocation = await request;
-      setSelectedLocation(liveLocation);
+      setAcquiredLocation(liveLocation);
       return liveLocation;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to acquire precise GPS location.';
@@ -88,8 +90,8 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
   const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if ((!file.type.startsWith('image/') && !file.type.startsWith('video/')) || file.size > 25 * 1024 * 1024) {
-        alert('Choose an image or video smaller than 25 MB.');
+      if ((!file.type.startsWith('image/') && !file.type.startsWith('video/')) || file.size > 4 * 1024 * 1024) {
+        alert('Choose an image or video smaller than 4 MB.');
         e.target.value = '';
         return;
       }
@@ -119,6 +121,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!description && !mediaFile) {
       alert('Please add a description or photo of the incident.');
       return;
@@ -126,7 +129,9 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
 
     try {
       setIsSubmitting(true);
-      const liveLocation = await refreshAccurateLocation();
+      setSubmissionError(null);
+      const liveLocation = isFreshLiveLocation(selectedLocation)
+        ? selectedLocation : await refreshAccurateLocation();
       const formData = new FormData();
       if (title) formData.append('title', title);
       formData.append('description', description);
@@ -139,16 +144,16 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
         formData.append('accuracyMeters', liveLocation.accuracyMeters.toString());
       }
       if (liveLocation.capturedAt) formData.append('capturedAt', liveLocation.capturedAt);
-      formData.append('reporterName', isAnonymous ? 'Anonymous Citizen' : 'Arfa Altaf');
-      formData.append('reporterPhone', isAnonymous ? '' : '+1 (555) 019-2834');
-      formData.append('isAnonymous', isAnonymous ? 'true' : 'false');
+      formData.append('reporterName', 'Arfa Altaf');
+      formData.append('reporterPhone', '+1 (555) 019-2834');
+      formData.append('isAnonymous', 'false');
       if (mediaFile) formData.append('media', mediaFile);
 
       const created = await api.createIncident(formData);
       soundAlerts.playChime();
       onIncidentSubmitted(created);
     } catch (error: unknown) {
-      alert('Report not submitted: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      setSubmissionError('Report not submitted: ' + (error instanceof Error ? error.message : 'Please try again.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -309,7 +314,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
             </label>
             <button
               type="button"
-              onClick={() => void refreshAccurateLocation().catch(() => undefined)}
+              onClick={() => void refreshAccurateLocation(true).catch(() => undefined)}
               disabled={isLocating}
               className="text-[11px] bg-purple-50 text-[#5E43F3] px-2 py-0.5 rounded-lg font-bold hover:bg-purple-100 flex items-center space-x-1 active:scale-95 transition-all disabled:opacity-60"
             >
@@ -329,7 +334,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
             </div>
           </div>
 
-          {locationError && (
+          {locationError && !isFreshLiveLocation(selectedLocation) && (
             <div className="mb-2 rounded-xl bg-red-50 px-3 py-2 text-[10px] font-semibold text-red-700">
               {locationError}
             </div>
@@ -340,25 +345,15 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
           </div>
 
           <p className="text-[10px] leading-relaxed text-gray-500">
-            A fresh device GPS fix, its accuracy, and capture time will be sent to the authority when you submit.
+            Your recent device coordinates, accuracy, and capture time will be sent to the authority. An approximate reading will not delay your report.
           </p>
         </div>
 
-        {/* Anonymous Toggle */}
-        <div className="flex items-center justify-between bg-white rounded-2xl p-3 shadow-sm">
-          <div className="text-xs font-medium text-[#4B5563]">Submit Anonymously</div>
-          <button
-            type="button"
-            onClick={() => setIsAnonymous(!isAnonymous)}
-            className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${
-              isAnonymous ? 'bg-[#5E43F3]' : 'bg-gray-300'
-            }`}
-          >
-            <div className={`w-5 h-5 rounded-full bg-white transition-transform ${
-              isAnonymous ? 'translate-x-5' : 'translate-x-0'
-            }`} />
-          </button>
-        </div>
+        {submissionError && (
+          <div role="alert" className="rounded-2xl bg-red-50 px-4 py-3 text-xs font-semibold text-red-700">
+            {submissionError}
+          </div>
+        )}
 
         {/* Submit Pill Button matching design */}
         <button
@@ -367,7 +362,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
           className="w-full bg-[#5E43F3] hover:bg-[#4E33EC] active:scale-[0.98] transition-all text-white font-semibold py-4 px-6 rounded-full flex items-center justify-between shadow-lg shadow-purple-500/25 cursor-pointer disabled:opacity-50"
         >
           <span className="text-sm font-bold pl-2">
-            {isSubmitting ? 'Confirming GPS & Routing...' : 'Submit Incident Report'}
+            {isSubmitting ? (isLocating ? 'Getting location...' : 'Sending report...') : 'Submit Incident Report'}
           </span>
           <div className="w-10 h-10 rounded-full bg-white text-[#5E43F3] flex items-center justify-center shadow-md">
             {isSubmitting ? (

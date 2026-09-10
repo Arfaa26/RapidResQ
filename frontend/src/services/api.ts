@@ -4,12 +4,14 @@ const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') 
 const API_BASE = `${configuredBaseUrl}/api`;
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
+  const response = await fetch(url, { cache: 'no-store', ...init });
   const data = await response.json().catch(() => null) as { error?: string; message?: string } | null;
 
   if (!response.ok) {
     throw new Error(data?.error || data?.message || `Request failed (${response.status})`);
   }
+
+  if (!data) throw new Error('The API returned an invalid response. Check the backend connection.');
 
   return data as T;
 }

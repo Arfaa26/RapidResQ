@@ -1,4 +1,5 @@
 import { Incident, IncidentStatus, AssignedUnit } from '../types/index.js';
+import { getDatabase } from './database.js';
 
 class IncidentStore {
   private incidents: Map<string, Incident> = new Map();
@@ -245,8 +246,11 @@ class IncidentStore {
     seed.forEach(inc => this.incidents.set(inc.id, inc));
   }
 
-  public getAllIncidents(filters?: { department?: string; status?: string; priority?: string }): Incident[] {
-    let list = Array.from(this.incidents.values());
+  public async getAllIncidents(filters?: { department?: string; status?: string; priority?: string }): Promise<Incident[]> {
+    const sql = await getDatabase();
+    let list: Incident[] = sql
+      ? (await sql`SELECT data FROM rapidresq_incidents ORDER BY data->>'createdAt' DESC`).map((row) => row.data as Incident)
+      : Array.from(this.incidents.values());
 
     if (filters?.department && filters.department !== 'ALL') {
       list = list.filter(i => i.department === filters.department);
@@ -262,23 +266,42 @@ class IncidentStore {
     return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  public getIncidentById(id: string): Incident | undefined {
+  public async getIncidentById(id: string): Promise<Incident | undefined> {
+    const sql = await getDatabase();
+    if (sql) return (await sql`SELECT data FROM rapidresq_incidents WHERE id = ${id}`)[0]?.data as Incident | undefined;
     return this.incidents.get(id);
   }
 
-  public createIncident(incident: Incident): Incident {
+  public async createIncident(incident: Incident): Promise<Incident> {
+    const sql = await getDatabase();
+    if (sql) {
+      const rows = await sql`INSERT INTO rapidresq_incidents (id, data)
+        VALUES (${incident.id}, ${JSON.stringify(incident)}::jsonb) RETURNING data`;
+      return rows[0].data as Incident;
+    }
     this.incidents.set(incident.id, incident);
     return incident;
   }
 
-  public updateIncidentStatus(
+  public async updateIncidentStatus(
     id: string, 
     status: IncidentStatus, 
     note: string, 
     updatedBy: string = 'Authority Dispatcher',
     proofPhotoUrl?: string,
     unit?: AssignedUnit
-  ): Incident | null {
+  ): Promise<Incident | null> {
+    const sql = await getDatabase();
+    if (sql) {
+      const now = new Date().toISOString();
+      const changes = { status, updatedAt: now, ...(unit ? { assignedUnit: unit } : {}) };
+      const event = { id: `TL-${crypto.randomUUID()}`, status, timestamp: now, note, updatedBy, proofPhotoUrl };
+      // Append against the current row in one statement, preserving concurrent notes.
+      const rows = await sql`UPDATE rapidresq_incidents SET data = data || ${JSON.stringify(changes)}::jsonb
+        || jsonb_build_object('timeline', COALESCE(data->'timeline', '[]'::jsonb) || ${JSON.stringify([event])}::jsonb)
+        WHERE id = ${id} RETURNING data`;
+      return rows[0]?.data as Incident ?? null;
+    }
     const inc = this.incidents.get(id);
     if (!inc) return null;
 
@@ -302,8 +325,8 @@ class IncidentStore {
     return inc;
   }
 
-  public getStats() {
-    const list = Array.from(this.incidents.values());
+  public async getStats() {
+    const list = await this.getAllIncidents();
     const criticalCount = list.filter(i => i.priority === 'CRITICAL' && i.status !== 'RESOLVED').length;
     const pendingCount = list.filter(i => i.status === 'PENDING').length;
     const inProgressCount = list.filter(i => i.status === 'IN_PROGRESS' || i.status === 'ACKNOWLEDGED').length;
@@ -327,7 +350,9 @@ class IncidentStore {
     };
   }
 
-  public resetDemoData() {
+  public async resetDemoData() {
+    const sql = await getDatabase();
+    if (sql) throw new Error('Demo reset is disabled for the shared database to protect submitted reports.');
     this.incidents.clear();
     this.seedInitialData();
   }

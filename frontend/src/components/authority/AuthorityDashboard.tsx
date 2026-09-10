@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   ShieldAlert, 
   Flame, 
@@ -36,7 +36,8 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+  const seenIncidentIds = useRef<Set<string> | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
   // Status update form states
@@ -45,6 +46,19 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
   const [assignedUnitBadge, setAssignedUnitBadge] = useState('');
   const [etaInput, setEtaInput] = useState('5');
   const [proofFile, setProofFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    if (incidents.length === 0) return;
+    const incoming = seenIncidentIds.current
+      ? incidents.filter((incident) => !seenIncidentIds.current!.has(incident.id)) : [];
+    seenIncidentIds.current = new Set(incidents.map((incident) => incident.id));
+    if (isMuted || incoming.length === 0) return;
+    if (incoming.some((incident) => incident.priority === 'CRITICAL' || incident.priority === 'HIGH')) {
+      soundAlerts.playEmergencySiren();
+    } else {
+      soundAlerts.playChime();
+    }
+  }, [incidents, isMuted]);
 
   const departments: { id: string; name: string; icon: React.ReactNode; color: string }[] = [
     { id: 'ALL', name: 'All Departments', icon: <Radio size={16} />, color: 'bg-gray-800' },
@@ -142,9 +156,10 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
               if (isMuted) soundAlerts.playEmergencySiren();
             }}
             className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
-            title={isMuted ? 'Unmute siren' : 'Mute siren'}
+            title={isMuted ? 'Enable sound alerts for new reports' : 'Mute sound alerts'}
           >
             {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} className="text-purple-400" />}
+            <span className="text-xs ml-2">{isMuted ? 'Enable sound' : 'Sound on'}</span>
           </button>
 
           <button

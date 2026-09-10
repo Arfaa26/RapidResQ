@@ -86,7 +86,7 @@ export const ActiveSosScreen: React.FC<ActiveSosScreenProps> = ({
           SOS Activated
         </h2>
         <p className="text-xs text-[#6B7280] text-center max-w-xs font-medium leading-snug">
-          Your alert has been sent to emergency responders and trusted contacts.
+          Your SOS and device location have been saved for the Authority Command Center.
         </p>
       </div>
 
@@ -94,10 +94,10 @@ export const ActiveSosScreen: React.FC<ActiveSosScreenProps> = ({
       <div className="bg-white rounded-2xl p-3.5 shadow-sm mb-4">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center space-x-2">
-            <span className="text-xs font-bold text-[#1E1B4B]">Live Location Sharing</span>
+            <span className="text-xs font-bold text-[#1E1B4B]">Location Sent to Authority</span>
             <span className="text-[10px] font-bold bg-[#ECFDF5] text-[#10B981] px-2 py-0.5 rounded-full flex items-center space-x-1">
               <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-ping" />
-              <span>Active</span>
+              <span>Saved</span>
             </span>
           </div>
           <Navigation size={14} className="text-[#5E43F3]" />
@@ -121,7 +121,7 @@ export const ActiveSosScreen: React.FC<ActiveSosScreenProps> = ({
 
       {/* 4. Alert Sent To (3) Contacts List matching design */}
       <div className="flex items-center justify-between mb-2 px-1">
-        <h3 className="text-xs font-bold text-[#1E1B4B]">Alert Sent To ({emergencyContacts.length})</h3>
+        <h3 className="text-xs font-bold text-[#1E1B4B]">Demo Emergency Contacts</h3>
         <span className="text-[11px] text-[#6B7280] font-semibold">Tap to call</span>
       </div>
 
@@ -157,7 +157,7 @@ export const ActiveSosScreen: React.FC<ActiveSosScreenProps> = ({
       <div className="bg-purple-50/80 border border-purple-100 rounded-2xl p-3 flex items-center space-x-2.5 mb-5 text-[#5E43F3]">
         <ShieldCheck size={18} className="flex-shrink-0" />
         <span className="text-[11px] font-semibold leading-tight">
-          Central Dispatch & First Responders have received high-priority GPS telemetry.
+          Your report is awaiting acknowledgement in the Authority Command Center.
         </span>
       </div>
 

@@ -14,6 +14,7 @@ interface InteractiveMapProps {
 }
 
 const DEFAULT_CENTER: [number, number] = [40.730610, -73.935242];
+const EMPTY_INCIDENTS: Incident[] = [];
 
 const escapeHtml = (value: string) => value.replace(/[&<>'"]/g, (character) => ({
   '&': '&amp;',
@@ -24,7 +25,7 @@ const escapeHtml = (value: string) => value.replace(/[&<>'"]/g, (character) => (
 }[character] ?? character));
 
 export const InteractiveMap: React.FC<InteractiveMapProps> = ({
-  incidents = [],
+  incidents = EMPTY_INCIDENTS,
   selectedLocation,
   onLocationSelect,
   center = DEFAULT_CENTER,
@@ -36,6 +37,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
   const onLocationSelectRef = useRef(onLocationSelect);
+  const lastSelectedCoordinates = useRef<string | null>(null);
   const [centerLat, centerLng] = center;
 
   useEffect(() => {
@@ -52,8 +54,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         zoomControl: !isPicker,
       });
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
       }).addTo(map);
 
@@ -75,6 +77,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
+        lastSelectedCoordinates.current = null;
       }
     };
   }, [centerLat, centerLng, isPicker, zoom]);
@@ -86,7 +89,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     markersRef.current.clearLayers();
 
     // 1. If in picker mode with selected location
-    if (selectedLocation) {
+    if (selectedLocation && selectedLocation.source !== 'FALLBACK') {
       const customPin = L.divIcon({
         className: 'custom-pin',
         html: `
@@ -112,7 +115,17 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       const marker = L.marker([selectedLocation.lat, selectedLocation.lng], { icon: customPin });
       marker.bindPopup(`<b>Selected Incident Location</b><br/>${escapeHtml(selectedLocation.address)}`);
       markersRef.current.addLayer(marker);
-      mapInstanceRef.current.setView([selectedLocation.lat, selectedLocation.lng], 14);
+      if (selectedLocation.accuracyMeters !== undefined) {
+        markersRef.current.addLayer(L.circle([selectedLocation.lat, selectedLocation.lng], {
+          radius: selectedLocation.accuracyMeters, color: '#5E43F3', weight: 1, fillOpacity: 0.08,
+        }));
+      }
+      const coordinates = `${selectedLocation.lat},${selectedLocation.lng}`;
+      if (lastSelectedCoordinates.current !== coordinates) {
+        mapInstanceRef.current.setView([selectedLocation.lat, selectedLocation.lng],
+          lastSelectedCoordinates.current ? mapInstanceRef.current.getZoom() : 15, { animate: false });
+        lastSelectedCoordinates.current = coordinates;
+      }
       return;
     }
 

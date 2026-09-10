@@ -9,12 +9,13 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { incidentStore } from './services/incidentStore.js';
 import { triageIncident } from './services/aiTriage.js';
+import { getDatabase, isDatabaseConfigured } from './services/database.js';
+import { readMedia, saveMedia } from './services/mediaStore.js';
 import { Incident, IncidentStatus, AssignedUnit } from './types/index.js';
-
-dotenv.config({ quiet: true });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+dotenv.config({ path: [path.join(__dirname, '../.env'), '.env'], quiet: true });
 
 const app = express();
 const isVercel = Boolean(process.env.VERCEL);
@@ -41,6 +42,7 @@ const removeUploadedFile = (file?: Express.Multer.File) => {
 };
 
 const parseCoordinate = (value: unknown, min: number, max: number) => {
+  if (typeof value === 'string' && !value.trim()) return undefined;
   const parsed = typeof value === 'string' || typeof value === 'number' ? Number(value) : Number.NaN;
   return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : undefined;
 };
@@ -53,6 +55,7 @@ const parsePositiveInteger = (value: unknown) => {
 };
 
 const parseAccuracy = (value: unknown) => {
+  if (typeof value === 'string' && !value.trim()) return undefined;
   const parsed = typeof value === 'string' || typeof value === 'number' ? Number(value) : Number.NaN;
   return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : undefined;
 };
@@ -86,7 +89,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB max
+  limits: { fileSize: 4 * 1024 * 1024 }, // Keep multipart requests below the Vercel function payload limit.
   fileFilter: (_req, file, cb) => {
     if (uploadExtensions.has(file.mimetype)) {
       cb(null, true);
@@ -103,17 +106,33 @@ app.use((_req: Request, res: Response, next: express.NextFunction) => {
   next();
 });
 app.use('/uploads', express.static(uploadsDir));
+app.use('/api', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
 
 // --- API ROUTES ---
 
-app.get('/api/health', (_req: Request, res: Response) => {
-  res.json({ success: true, status: 'ok', timestamp: new Date().toISOString() });
+app.get('/api/health', async (_req: Request, res: Response) => {
+  try {
+    const sql = await getDatabase();
+    if (sql) await sql`SELECT 1`;
+    res.json({ success: true, status: 'ok', storage: sql ? 'postgres' : 'local-demo', timestamp: new Date().toISOString() });
+  } catch {
+    res.status(503).json({ success: false, error: 'Database unavailable. Check the database connection and redeploy.' });
+  }
+});
+
+app.get('/api/media/:id', async (req: Request, res: Response) => {
+  const media = await readMedia(req.params.id as string);
+  if (!media) return res.status(404).json({ success: false, error: 'Attachment not found.' });
+  res.type(media.mimeType).send(media.content);
 });
 
 // 1. Get all incidents with optional filters
-app.get('/api/incidents', (req: Request, res: Response) => {
+app.get('/api/incidents', async (req: Request, res: Response) => {
   const { department, status, priority } = req.query;
-  const incidents = incidentStore.getAllIncidents({
+  const incidents = await incidentStore.getAllIncidents({
     department: department as string,
     status: status as string,
     priority: priority as string,
@@ -122,9 +141,9 @@ app.get('/api/incidents', (req: Request, res: Response) => {
 });
 
 // 2. Get single incident by ID
-app.get('/api/incidents/:id', (req: Request, res: Response) => {
+app.get('/api/incidents/:id', async (req: Request, res: Response) => {
   const incidentId = req.params.id as string;
-  const incident = incidentStore.getIncidentById(incidentId);
+  const incident = await incidentStore.getIncidentById(incidentId);
   if (!incident) {
     return res.status(404).json({ success: false, message: 'Incident not found' });
   }
@@ -172,7 +191,6 @@ app.post('/api/incidents', upload.single('media'), async (req: Request, res: Res
       address,
       reporterName,
       reporterPhone,
-      isAnonymous,
       isEmergencySOS,
       accuracyMeters,
       capturedAt,
@@ -191,12 +209,18 @@ app.post('/api/incidents', upload.single('media'), async (req: Request, res: Res
     const gpsCapturedAt = parseTimestamp(capturedAt);
     const isGpsLocation = locationSource === 'GPS';
 
+    if (latitude === undefined || longitude === undefined || locationSource === 'FALLBACK') {
+      removeUploadedFile(req.file);
+      return res.status(400).json({ success: false, error: 'Valid device coordinates are required. Refresh GPS and try again.' });
+    }
+
     if (isGpsLocation && (
       latitude === undefined
       || longitude === undefined
       || gpsAccuracy === undefined
-      || gpsAccuracy > 250
       || gpsCapturedAt === undefined
+      || Date.now() - Date.parse(gpsCapturedAt) > 120_000
+      || Date.parse(gpsCapturedAt) > Date.now() + 30_000
     )) {
       removeUploadedFile(req.file);
       return res.status(400).json({
@@ -210,7 +234,6 @@ app.post('/api/incidents', upload.single('media'), async (req: Request, res: Res
     let mimeType: string | undefined;
 
     if (req.file) {
-      mediaUrl = `/uploads/${req.file.filename}`;
       imageBuffer = fs.readFileSync(req.file.path);
       mimeType = req.file.mimetype;
     }
@@ -228,6 +251,7 @@ app.post('/api/incidents', upload.single('media'), async (req: Request, res: Res
     if (emergencySos) {
       aiAnalysis.priority = 'CRITICAL';
     }
+    if (req.file) mediaUrl = await saveMedia(req.file);
 
     const newId = `INC-${new Date().getUTCFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`;
     const now = new Date().toISOString();
@@ -253,7 +277,7 @@ app.post('/api/incidents', upload.single('media'), async (req: Request, res: Res
       reportedBy: {
         name: reporterName || 'Arfa Altaf',
         phone: reporterPhone || '+1 (555) 019-2834',
-        isAnonymous: isAnonymous === 'true' || isAnonymous === true,
+        isAnonymous: false,
       },
       aiAnalysis,
       timeline: [
@@ -269,7 +293,7 @@ app.post('/api/incidents', upload.single('media'), async (req: Request, res: Res
       updatedAt: now,
     };
 
-    const saved = incidentStore.createIncident(incident);
+    const saved = await incidentStore.createIncident(incident);
     res.status(201).json({ success: true, incident: saved });
   } catch (error: unknown) {
     removeUploadedFile(req.file);
@@ -279,7 +303,7 @@ app.post('/api/incidents', upload.single('media'), async (req: Request, res: Res
 });
 
 // 5. Update Incident Status (From Authority Command Center)
-app.patch('/api/incidents/:id/status', upload.single('proofPhoto'), (req: Request, res: Response) => {
+app.patch('/api/incidents/:id/status', upload.single('proofPhoto'), async (req: Request, res: Response) => {
   try {
     const incidentId = req.params.id as string;
     const { status, note, updatedBy, unitName, unitBadge, unitPhone, etaMinutes } = req.body ?? {};
@@ -288,10 +312,14 @@ app.patch('/api/incidents/:id/status', upload.single('proofPhoto'), (req: Reques
       removeUploadedFile(req.file);
       return res.status(400).json({ success: false, error: 'Invalid incident status.' });
     }
+    if (!await incidentStore.getIncidentById(incidentId)) {
+      removeUploadedFile(req.file);
+      return res.status(404).json({ success: false, message: 'Incident not found' });
+    }
     
     let proofPhotoUrl: string | undefined;
     if (req.file) {
-      proofPhotoUrl = `/uploads/${req.file.filename}`;
+      proofPhotoUrl = await saveMedia(req.file);
     }
 
     let unit: AssignedUnit | undefined;
@@ -305,7 +333,7 @@ app.patch('/api/incidents/:id/status', upload.single('proofPhoto'), (req: Reques
       };
     }
 
-    const updated = incidentStore.updateIncidentStatus(
+    const updated = await incidentStore.updateIncidentStatus(
       incidentId,
       status as IncidentStatus,
       note || `Status changed to ${status}`,
@@ -327,21 +355,24 @@ app.patch('/api/incidents/:id/status', upload.single('proofPhoto'), (req: Reques
 });
 
 // 6. Real-Time Stats Overview
-app.get('/api/stats', (_req: Request, res: Response) => {
-  const stats = incidentStore.getStats();
+app.get('/api/stats', async (_req: Request, res: Response) => {
+  const stats = await incidentStore.getStats();
   res.json({ success: true, stats });
 });
 
 // 7. Reset / Seed Demo
-app.post('/api/seed', (_req: Request, res: Response) => {
-  incidentStore.resetDemoData();
+app.post('/api/seed', async (_req: Request, res: Response) => {
+  if (isDatabaseConfigured() || isVercel) {
+    return res.status(403).json({ success: false, error: 'Demo reset is disabled for the shared database.' });
+  }
+  await incidentStore.resetDemoData();
   res.json({ success: true, message: 'Demo data reseeded' });
 });
 
 app.use((error: unknown, _req: Request, res: Response, _next: express.NextFunction) => {
   if (error instanceof multer.MulterError) {
     const message = error.code === 'LIMIT_FILE_SIZE'
-      ? 'Upload is too large. The maximum file size is 25 MB.'
+      ? 'Upload is too large. The maximum file size is 4 MB.'
       : error.message;
     res.status(400).json({ success: false, error: message });
     return;

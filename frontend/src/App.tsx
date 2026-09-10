@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { 
   Smartphone, 
   Monitor, 
@@ -32,6 +32,11 @@ export function App() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [isSendingSos, setIsSendingSos] = useState(false);
+  const sendingSosRef = useRef(false);
+  const loadingRef = useRef(false);
+  const dataVersionRef = useRef(0);
 
   // Live GPS Location of the user
   const [userLocation, setUserLocation] = useState<LocationData>({
@@ -53,9 +58,6 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    // The effect intentionally starts synchronization with external GPS state.
-    // oxlint-disable-next-line react/set-state-in-effect
-    void refreshLiveLocation();
     const watchId = locationService.watchLiveLocation((loc) => {
       setUserLocation(loc);
     });
@@ -67,10 +69,15 @@ export function App() {
 
   // Load incidents & stats
   const loadData = useCallback(async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    const version = dataVersionRef.current;
     try {
       const [list, s] = await Promise.all([api.getIncidents(), api.getStats()]);
+      if (version !== dataVersionRef.current) return;
       setIncidents(list);
       setStats(s);
+      setSyncError(null);
 
       // Keep selected incident updated in real-time
       setSelectedIncident((current) => {
@@ -79,6 +86,9 @@ export function App() {
       });
     } catch (err) {
       console.error('Failed loading incidents', err);
+      setSyncError('Unable to sync the authority dashboard. ' + (err instanceof Error ? err.message : 'Please retry.'));
+    } finally {
+      loadingRef.current = false;
     }
   }, []);
 
@@ -86,12 +96,21 @@ export function App() {
     // The effect intentionally starts synchronization with the API.
     // oxlint-disable-next-line react/set-state-in-effect
     void loadData();
-    const interval = window.setInterval(() => void loadData(), 4000); // 4-sec real-time polling
-    return () => clearInterval(interval);
+    const interval = window.setInterval(() => void loadData(), 3000);
+    window.addEventListener('online', loadData);
+    window.addEventListener('focus', loadData);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', loadData);
+      window.removeEventListener('focus', loadData);
+    };
   }, [loadData]);
 
   // SOS Quick Trigger
   const handleTriggerSos = async () => {
+    if (sendingSosRef.current) return;
+    sendingSosRef.current = true;
+    setIsSendingSos(true);
     try {
       const liveLocation = isFreshLiveLocation(userLocation)
         ? userLocation
@@ -115,16 +134,23 @@ export function App() {
       formData.append('isEmergencySOS', 'true');
 
       const created = await api.createIncident(formData);
+      dataVersionRef.current++;
+      setIncidents((current) => [created, ...current.filter((incident) => incident.id !== created.id)]);
       setSelectedIncident(created);
       setCitizenScreen('ACTIVE_SOS');
       void loadData();
     } catch (err) {
       console.error('SOS Trigger Error', err);
       alert(err instanceof Error ? err.message : 'Unable to acquire your live GPS location.');
+    } finally {
+      sendingSosRef.current = false;
+      setIsSendingSos(false);
     }
   };
 
   const handleIncidentSubmitted = (created: Incident) => {
+    dataVersionRef.current++;
+    setIncidents((current) => [created, ...current.filter((incident) => incident.id !== created.id)]);
     setSelectedIncident(created);
     setCitizenScreen('TRACKING');
     void loadData();
@@ -268,6 +294,16 @@ export function App() {
         </div>
       </nav>
 
+      {syncError && (
+        <div role="alert" className="bg-amber-50 px-4 py-2 text-center text-sm text-amber-800">
+          {syncError} <button onClick={() => void loadData()} className="font-bold underline">Retry</button>
+        </div>
+      )}
+      {isSendingSos && (
+        <div role="status" className="bg-red-50 px-4 py-2 text-center text-sm font-bold text-red-700">
+          Sending SOS and device location to the authority dashboard...
+        </div>
+      )}
       {/* Main View Area */}
       <main className="flex-1 flex items-center justify-center p-2 sm:p-6 overflow-hidden">
         {role === 'CITIZEN' && (
@@ -296,7 +332,7 @@ export function App() {
               )}
               {citizenScreen === 'ACTIVE_SOS' && (
                 <ActiveSosScreen
-                  userLocation={userLocation}
+                  userLocation={selectedIncident?.location ?? userLocation}
                   onBack={handleExitSos}
                   onCancelSos={handleExitSos}
                 />
@@ -370,7 +406,7 @@ export function App() {
                 )}
                 {citizenScreen === 'ACTIVE_SOS' && (
                   <ActiveSosScreen
-                    userLocation={userLocation}
+                    userLocation={selectedIncident?.location ?? userLocation}
                     onBack={handleExitSos}
                     onCancelSos={handleExitSos}
                   />

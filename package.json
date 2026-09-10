@@ -2,10 +2,12 @@
   "name": "rapidresq-system",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "engines": {
     "node": ">=18"
   },
   "scripts": {
+    "test": "node --import ./backend/node_modules/tsx/dist/loader.mjs --test frontend/tests/*.test.ts backend/tests/*.test.ts",
     "install:apps": "npm install --prefix backend && npm install --prefix frontend",
     "postinstall": "npm run install:apps",
     "dev:backend": "npm --prefix backend run dev",

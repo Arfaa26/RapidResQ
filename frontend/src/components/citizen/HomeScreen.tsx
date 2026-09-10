@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { 
   Bell, 
-  Phone, 
   MapPin, 
   ShieldAlert, 
   Mic, 
@@ -14,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Incident, LocationData } from '../../types';
 import { soundAlerts } from '../../utils/audioAlert';
+import { isFreshLiveLocation, locationService } from '../../services/locationService';
 
 interface HomeScreenProps {
   onTriggerSos: () => void;
@@ -35,7 +35,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onRefreshLocation,
 }) => {
   const [activeTipIndex, setActiveTipIndex] = useState(0);
-  const [showFakeCallModal, setShowFakeCallModal] = useState(false);
   const [showTimerModal, setShowTimerModal] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(300); // 5 mins
   const [isTimerActive, setIsTimerActive] = useState(false);
@@ -83,10 +82,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   const handleShareLocation = async () => {
-    const mapsUrl = `https://www.openstreetmap.org/?mlat=${userLocation.lat}&mlon=${userLocation.lng}#map=16/${userLocation.lat}/${userLocation.lng}`;
-    const text = `My live location: ${userLocation.address}\n${mapsUrl}`;
-
     try {
+      const location = isFreshLiveLocation(userLocation) ? userLocation : await locationService.getAccurateCurrentLocation();
+      const mapsUrl = `https://www.openstreetmap.org/?mlat=${location.lat}&mlon=${location.lng}#map=16/${location.lat}/${location.lng}`;
+      const text = `My device location (accuracy ±${location.accuracyMeters} m): ${location.address}\n${mapsUrl}`;
       if (navigator.share) {
         await navigator.share({ title: 'RapidResQ live location', text, url: mapsUrl });
         setShareFeedback('Location shared.');
@@ -164,7 +163,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         <div className="max-w-[58%] z-10">
           <h2 className="text-lg font-extrabold text-white mb-1">Need Help?</h2>
           <p className="text-xs text-white/90 leading-snug font-medium">
-            Tap the button to alert your contacts and emergency dispatch
+            Tap the button to send your location to the authority dashboard
           </p>
         </div>
 
@@ -194,19 +193,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </button>
       </div>
 
-      {/* 4-Grid Quick Actions matching UI */}
-      <div className="grid grid-cols-4 gap-2.5 mb-5">
-        {/* Fake Call / Hotline */}
-        <button 
-          onClick={() => setShowFakeCallModal(true)}
-          className="bg-white rounded-2xl p-2.5 flex flex-col items-center justify-center shadow-sm hover:shadow-md active:scale-95 transition-all group"
-        >
-          <div className="w-11 h-11 rounded-full bg-[#10B981]/15 flex items-center justify-center mb-1.5 text-[#10B981] group-hover:scale-105 transition-transform">
-            <Phone size={18} />
-          </div>
-          <span className="text-[11px] font-semibold text-[#4B5563] text-center leading-tight">Fake Call</span>
-        </button>
-
+      {/* Quick Actions */}
+      <div className="grid grid-cols-3 gap-2.5 mb-5">
         {/* Share Location */}
         <button 
           onClick={() => void handleShareLocation()}
@@ -356,37 +344,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </button>
       </div>
 
-      {/* Fake Call Simulated Modal */}
-      {showFakeCallModal && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-          <div className="bg-[#1C1C1E] text-white w-full max-w-xs rounded-3xl p-6 flex flex-col items-center text-center shadow-2xl animate-fade-in">
-            <div className="w-20 h-20 rounded-full bg-gray-600 flex items-center justify-center text-3xl font-bold mb-3 border-2 border-gray-400">
-              👮
-            </div>
-            <div className="text-xs text-gray-400 mb-1">Incoming Emergency Security Call...</div>
-            <div className="text-lg font-bold mb-6">Central Safety Officer</div>
-            
-            <div className="flex items-center justify-around w-full">
-              <button 
-                onClick={() => setShowFakeCallModal(false)}
-                className="w-14 h-14 rounded-full bg-red-600 flex items-center justify-center text-white shadow-lg active:scale-90 transition-transform"
-              >
-                <Phone size={24} className="rotate-[135deg]" />
-              </button>
-              <button 
-                onClick={() => {
-                  soundAlerts.playChime();
-                  setShowFakeCallModal(false);
-                }}
-                className="w-14 h-14 rounded-full bg-green-500 flex items-center justify-center text-white shadow-lg active:scale-90 transition-transform"
-              >
-                <Phone size={24} />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Safety Timer Modal */}
       {showTimerModal && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
@@ -396,7 +353,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </div>
             <div className="text-base font-bold text-[#1E1B4B] mb-1">SafeWalk Safety Timer</div>
             <div className="text-xs text-gray-500 mb-4">
-              If not cancelled before timer ends, emergency contacts and dispatch will receive your GPS pin automatically.
+              If not cancelled before the timer ends, an SOS with your device location will be sent to the authority dashboard.
             </div>
 
             <div className="text-3xl font-black text-[#5E43F3] mb-6 font-mono">

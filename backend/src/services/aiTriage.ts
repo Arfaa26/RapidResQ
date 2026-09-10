@@ -65,6 +65,7 @@ Category Hint: ${input.categoryHint || 'None'}
   contents.push({ parts });
 
   const res = await fetch(endpoint, {
+    signal: AbortSignal.timeout(5_000),
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

@@ -1,6 +1,8 @@
 import type { LocationData } from '../types';
 
-const MAX_LOCATION_AGE_MS = 30_000;
+// Stationary browsers may stop emitting fixes. Reuse a recent observation,
+// preserving its original timestamp so both citizen and dispatcher can assess it.
+const MAX_LOCATION_AGE_MS = 5 * 60_000;
 const LOCATION_TIMEOUT_MS = 10_000;
 const listeners = new Map<number, { update: (location: LocationData) => void; error?: (error: Error) => void }>();
 let nextListenerId = 0;

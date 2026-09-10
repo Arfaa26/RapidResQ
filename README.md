@@ -98,7 +98,7 @@ Open **`http://localhost:3000`** in your browser.
 
 - Use the top navigation bar to toggle between **📱 Citizen Mobile App**, **🖥️ Authority Command Center**, or **📱 ↔ 🖥️ Live Split Demo**.
 - Click the simulation buttons (**Fire**, **Accident**, **Civic**) to test instant emergency injections.
-- Allow **precise location** when the browser asks. Incident and SOS submissions reuse a device reading up to 30 seconds old and include its accuracy and capture time. Approximate locations are accepted; address lookup never blocks delivery.
+- Allow **precise location** when the browser asks. Incident and SOS submissions reuse a device reading up to 5 minutes old (shown with its original capture time) and include its accuracy and capture time. Approximate locations are accepted; address lookup never blocks delivery.
 - Browsers permit GPS on `localhost`; deployed copies must use HTTPS for live geolocation.
 
 ### 5. Production Build

@@ -53,11 +53,24 @@ test('simultaneous submissions share acquisition and accept an approximate fix',
   assert.equal(env.geolocation.clearWatch.mock.callCount(), 1);
 });
 
+test('stationary device keeps its timestamped last reading available for reporting', async (t) => {
+  const env = await setup(t);
+  env.locationService.watchLiveLocation(() => undefined);
+  env.position();
+  const capturedAt = new Date().toISOString();
+  t.mock.timers.tick(180_000);
+  env.error(3);
+  const location = await env.locationService.getAccurateCurrentLocation();
+  assert.equal(location.accuracyMeters, 178);
+  assert.equal(location.capturedAt, capturedAt);
+  assert.equal(env.geolocation.getCurrentPosition.mock.callCount(), 0);
+});
+
 test('expired stationary location requests a new reading; delayed readings never move the pin backwards', async (t) => {
   const env = await setup(t);
   env.locationService.watchLiveLocation(() => undefined);
   env.position();
-  t.mock.timers.tick(31_000);
+  t.mock.timers.tick(301_000);
   const fresh = env.locationService.getAccurateCurrentLocation();
   assert.equal(env.geolocation.getCurrentPosition.mock.callCount(), 1);
   env.position(100, 0, 19.05);
@@ -104,7 +117,7 @@ test('freshness rejects fallback, stale, future, and invalid locations', async (
   assert.equal(env.isFreshLiveLocation(good), true);
   for (const change of [
     { source: 'FALLBACK' }, { lat: 100 }, { lng: Infinity }, { accuracyMeters: -1 },
-    { capturedAt: new Date(Date.now() - 31_000).toISOString() },
+    { capturedAt: new Date(Date.now() - 301_000).toISOString() },
     { capturedAt: new Date(Date.now() + 1_000).toISOString() },
   ]) assert.equal(env.isFreshLiveLocation({ ...good, ...change }), false);
 });

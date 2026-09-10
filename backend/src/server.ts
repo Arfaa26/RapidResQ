@@ -219,7 +219,7 @@ app.post('/api/incidents', upload.single('media'), async (req: Request, res: Res
       || longitude === undefined
       || gpsAccuracy === undefined
       || gpsCapturedAt === undefined
-      || Date.now() - Date.parse(gpsCapturedAt) > 120_000
+      || Date.now() - Date.parse(gpsCapturedAt) > 6 * 60_000
       || Date.parse(gpsCapturedAt) > Date.now() + 30_000
     )) {
       removeUploadedFile(req.file);

@@ -310,7 +310,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
         <div className="bg-white rounded-3xl p-4 shadow-sm">
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs font-bold text-[#1E1B4B]">
-              4. Live GPS Location
+              4. Device Location
             </label>
             <button
               type="button"
@@ -328,7 +328,12 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
               <div className="truncate font-medium">{selectedLocation.address}</div>
               {selectedLocation.source === 'GPS' && selectedLocation.accuracyMeters !== undefined && (
                 <div className="mt-0.5 text-[10px] font-bold text-emerald-600">
-                  Live GPS · accurate to approximately {selectedLocation.accuracyMeters} m
+                  Device location · accurate to approximately {selectedLocation.accuracyMeters} m
+                </div>
+              )}
+              {selectedLocation.source === 'GPS' && selectedLocation.capturedAt && (
+                <div className="mt-0.5 text-[10px] text-gray-500">
+                  Captured {new Date(selectedLocation.capturedAt).toLocaleTimeString()}
                 </div>
               )}
             </div>
@@ -345,7 +350,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
           </div>
 
           <p className="text-[10px] leading-relaxed text-gray-500">
-            Your recent device coordinates, accuracy, and capture time will be sent to the authority. An approximate reading will not delay your report.
+            Your latest device reading from the last 5 minutes will be sent with its accuracy and capture time. Refresh GPS if you have moved or the pin looks wrong.
           </p>
         </div>
 

@@ -69,10 +69,17 @@ test('approximate SOS location is accepted and priority stays critical', async (
   assert.equal(incident.location.accuracyMeters, 1200);
 });
 
+test('recent stationary-device reading preserves its original capture time', async () => {
+  const capturedAt = new Date(Date.now() - 180_000).toISOString();
+  const response = await fetch(`${base}/incidents`, { method: 'POST', body: report({ capturedAt }) });
+  assert.equal(response.status, 201);
+  assert.equal((await response.json()).incident.location.capturedAt, capturedAt);
+});
+
 test('invalid or stale GPS is rejected without a fake location', async () => {
   for (const changes of [
     { lat: '' }, { lat: 'NaN' }, { lng: '181' }, { accuracyMeters: '-1' },
-    { capturedAt: new Date(Date.now() - 180_000).toISOString() }, { locationSource: 'FALLBACK' },
+    { capturedAt: new Date(Date.now() - 420_000).toISOString() }, { locationSource: 'FALLBACK' },
   ]) {
     const response = await fetch(`${base}/incidents`, { method: 'POST', body: report(changes) });
     assert.equal(response.status, 400);

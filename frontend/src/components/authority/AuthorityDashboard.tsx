@@ -364,7 +364,7 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
                 <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold">
                   {selectedIncident.location.source === 'GPS' && (
                     <span className="rounded-full bg-emerald-500/20 px-2 py-1 text-emerald-300">
-                      LIVE DEVICE GPS
+                      DEVICE LOCATION
                     </span>
                   )}
                   {selectedIncident.location.accuracyMeters !== undefined && (

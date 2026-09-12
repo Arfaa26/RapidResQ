@@ -4,7 +4,7 @@ emoji: 🚨
 colorFrom: purple
 colorTo: blue
 sdk: gradio
-sdk_version: 6.27.0
+sdk_version: 6.9.0
 python_version: '3.12'
 app_file: space_app.py
 pinned: false

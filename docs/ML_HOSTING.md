@@ -11,7 +11,7 @@ The user selected free hosting. Use the existing free Space rather than buying
 Docker hosting. Package tracked service code with
 `python ml-service/deploy/package_space.py --output <destination.zip>` and upload
 its contents to the Space repository. Its README selects `space_app.py`, Gradio
-6.27.0 and Python 3.12. Set the private `ML_SERVICE_KEY` Space secret before boot.
+6.9.0 and Python 3.12. Set the private `ML_SERVICE_KEY` Space secret before boot.
 
 The entry point downloads the pinned models, loads them on ZeroGPU's virtual CUDA
 device, and executes image/text/semantic inference through `spaces.GPU`. It retains

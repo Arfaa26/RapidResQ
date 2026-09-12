@@ -66,7 +66,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     },
     {
       title: 'AI Hazard Detection',
-      desc: 'Take a photo of hazards. AI instantly classifies and alerts the right department.',
+      desc: 'Submit a photo and description for ML-assisted authority review.',
       icon: '🤖',
     },
     {

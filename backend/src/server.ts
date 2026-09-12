@@ -10,6 +10,8 @@ import dotenv from 'dotenv';
 import { incidentStore } from './services/incidentStore.js';
 import { triageIncident } from './services/aiTriage.js';
 import { getDatabase, isDatabaseConfigured } from './services/database.js';
+import { mlRequest } from './services/mlClient.js';
+import { checkDuplicates, analyzeHotspots, resolveContext } from './services/incidentAnalytics.js';
 import { readMedia, saveMedia } from './services/mediaStore.js';
 import { Incident, IncidentStatus, AssignedUnit } from './types/index.js';
 
@@ -168,6 +170,12 @@ app.post('/api/ai/preview', upload.single('media'), async (req: Request, res: Re
       categoryHint,
       imageBuffer,
       mimeType,
+      context: (() => {
+        const lat = parseCoordinate(req.body?.lat, -90, 90);
+        const lng = parseCoordinate(req.body?.lng, -180, 180);
+        return lat !== undefined && lng !== undefined ? resolveContext(lat, lng) : undefined;
+      })(),
+      explain: req.body?.explain === 'true',
     });
 
     res.json({ success: true, aiAnalysis: aiResult });
@@ -240,16 +248,24 @@ app.post('/api/incidents', upload.single('media'), async (req: Request, res: Res
 
     // Run AI Triage Engine
     const aiAnalysis = await triageIncident({
-      title: title || (isEmergencySOS === 'true' ? 'Emergency SOS Triggered' : 'Citizen Incident Report'),
-      description: description || 'Immediate assistance requested by citizen.',
+      title: title || '',
+      description: description || '',
       categoryHint,
       imageBuffer,
       mimeType,
+      context: (() => {
+        const lat = parseCoordinate(req.body?.lat, -90, 90);
+        const lng = parseCoordinate(req.body?.lng, -180, 180);
+        return lat !== undefined && lng !== undefined ? resolveContext(lat, lng) : undefined;
+      })(),
+      explain: req.body?.explain === 'true',
     });
 
     // If SOS triggered explicitly, ensure priority is CRITICAL
     if (emergencySos) {
       aiAnalysis.priority = 'CRITICAL';
+      aiAnalysis.reasoning += ' Explicit citizen SOS overrides priority to CRITICAL (operational policy).';
+      if (aiAnalysis.fusion) aiAnalysis.fusion.steps.push('Explicit citizen SOS: CRITICAL override.');
     }
     if (req.file) mediaUrl = await saveMedia(req.file);
 
@@ -280,12 +296,14 @@ app.post('/api/incidents', upload.single('media'), async (req: Request, res: Res
         isAnonymous: false,
       },
       aiAnalysis,
+      reportCount: 1,
+      reportText: { title: String(title || '').slice(0, 500), description: String(description || '').slice(0, 10000) },
       timeline: [
         {
           id: `TL-${Date.now()}`,
           status: 'PENDING',
           timestamp: now,
-          note: `Report submitted. AI classified as ${aiAnalysis.priority} ${aiAnalysis.detectedCategory} and routed to ${aiAnalysis.department.replace('_', ' ')}.`,
+          note: `Report submitted. ${aiAnalysis.source === 'ml' ? 'ML triage recommendation' : 'Manual review pending'}: ${aiAnalysis.priority} ${aiAnalysis.detectedCategory}; department recommendation ${aiAnalysis.department.replaceAll('_', ' ')}.`,
           updatedBy: 'AI Triage & Router',
         },
       ],
@@ -293,6 +311,13 @@ app.post('/api/incidents', upload.single('media'), async (req: Request, res: Res
       updatedAt: now,
     };
 
+    incident.duplicateCheck = await checkDuplicates(incident, await incidentStore.getAllIncidents());
+    const match = incident.duplicateCheck.matches[0];
+    if (match) {
+      incident.duplicate = { status: 'POSSIBLE', of: match.incidentId, match };
+      incident.timeline.push({ id: `TL-${randomUUID()}`, status: 'PENDING', timestamp: now,
+        note: `Possible duplicate of ${match.incidentId}. Evidence retained; authority confirmation required.`, updatedBy: 'Duplicate checker' });
+    }
     const saved = await incidentStore.createIncident(incident);
     res.status(201).json({ success: true, incident: saved });
   } catch (error: unknown) {
@@ -312,9 +337,14 @@ app.patch('/api/incidents/:id/status', upload.single('proofPhoto'), async (req: 
       removeUploadedFile(req.file);
       return res.status(400).json({ success: false, error: 'Invalid incident status.' });
     }
-    if (!await incidentStore.getIncidentById(incidentId)) {
+    const currentIncident = await incidentStore.getIncidentById(incidentId);
+    if (!currentIncident) {
       removeUploadedFile(req.file);
       return res.status(404).json({ success: false, message: 'Incident not found' });
+    }
+    if (currentIncident.duplicate?.status === 'CONFIRMED') {
+      removeUploadedFile(req.file);
+      return res.status(409).json({ success: false, error: `Update primary incident ${currentIncident.duplicate.of}.` });
     }
     
     let proofPhotoUrl: string | undefined;
@@ -352,6 +382,29 @@ app.patch('/api/incidents/:id/status', upload.single('proofPhoto'), async (req: 
     removeUploadedFile(req.file);
     res.status(500).json({ success: false, error: errorMessage(error) });
   }
+});
+
+// ML endpoints are proxied through Node; the browser never receives service credentials.
+app.get('/api/ml/status', async (_req, res) => {
+  try { res.json({ success: true, ...(await mlRequest<object>('/health')) }); }
+  catch { res.status(503).json({ success: false, error: 'ML service unavailable or not configured.' }); }
+});
+app.get('/api/ml/evaluation', async (_req, res) => {
+  try { res.json({ success: true, models: await mlRequest('/evaluation') }); }
+  catch { res.status(503).json({ success: false, error: 'Evaluation unavailable. Start and configure the ML service.' }); }
+});
+app.get('/api/analytics/hotspots', async (req, res) => {
+  const days = Number(req.query.days || 7);
+  if (![1, 7, 30].includes(days)) return res.status(400).json({ success: false, error: 'Choose 1, 7 or 30 days.' });
+  try { res.json({ success: true, analytics: await analyzeHotspots(await incidentStore.getAllIncidents(), days) }); }
+  catch { res.status(503).json({ success: false, error: 'Hotspot analysis unavailable. Check the ML service connection.' }); }
+});
+app.patch('/api/incidents/:id/duplicate', async (req, res) => {
+  const { decision, reviewedBy } = req.body ?? {};
+  if (!['CONFIRM', 'REJECT'].includes(decision)) return res.status(400).json({ success: false, error: 'Choose CONFIRM or REJECT.' });
+  const result = await incidentStore.reviewDuplicate(String(req.params.id), decision, String(reviewedBy || 'Authority dispatcher').slice(0, 100));
+  if (!result) return res.status(409).json({ success: false, error: 'Duplicate review is stale or the target is no longer eligible. Refresh the report.' });
+  res.json({ success: true, incident: result });
 });
 
 // 6. Real-Time Stats Overview

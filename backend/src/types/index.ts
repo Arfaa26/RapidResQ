@@ -1,4 +1,5 @@
 export type IncidentCategory = 
+  | 'FLOOD'
   | 'FIRE' 
   | 'ACCIDENT' 
   | 'MEDICAL' 
@@ -30,7 +31,15 @@ export interface LocationData {
 }
 
 export interface AIAnalysisResult {
-  confidence: number;
+  confidence: number | null;
+  source?: 'ml' | 'manual_review' | 'demo' | 'legacy';
+  status?: string;
+  needsReview?: boolean;
+  image?: ModelPrediction;
+  text?: ModelPrediction;
+  imageHash?: string | null;
+  latencyMs?: number;
+  fusion?: { version: string; score: number | null; isProbability: false; steps: string[]; context?: { populatedArea?: boolean; source?: string } };
   detectedCategory: IncidentCategory;
   priority: PriorityLevel;
   department: DepartmentType;
@@ -74,8 +83,68 @@ export interface Incident {
     isAnonymous: boolean;
   };
   aiAnalysis: AIAnalysisResult;
+  reportCount?: number;
+  reportText?: { title: string; description: string };
+  isDemo?: boolean;
+  duplicateCheck?: DuplicateCheck;
+  duplicate?: { status: 'POSSIBLE' | 'CONFIRMED' | 'REJECTED'; of: string; match: DuplicateMatch; reviewedAt?: string; reviewedBy?: string };
   timeline: TimelineEvent[];
   assignedUnit?: AssignedUnit;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ModelPrediction {
+  status: string;
+  modelVersion?: string;
+  label?: string;
+  priority?: PriorityLevel;
+  confidence?: number;
+  probabilities?: Record<string, number> | null;
+  top3?: Array<{ label: string; probability: number }>;
+  severityScore?: number;
+  features?: Array<{ feature: string; contribution: number }>;
+  category?: IncidentCategory;
+  categoryProbabilities?: Record<string, number>;
+  gradCam?: string | null;
+  latencyMs?: number | null;
+}
+export interface DuplicateMatch {
+  incidentId: string;
+  distanceMeters: number;
+  timeDifferenceMinutes: number;
+  textSimilarity: number;
+  imageHashDistance: number | null;
+  locationUncertain: boolean;
+  reason: string;
+}
+export interface DuplicateCheck {
+  status: 'checked' | 'unavailable';
+  matches: DuplicateMatch[];
+  method: string;
+  candidatesTruncated?: boolean;
+}
+export interface Hotspot {
+  id: string; lat: number; lng: number; radiusMeters: number; count: number;
+  mainCategory: string; categories: Record<string, number>; incidentIds: string[];
+}
+export interface HotspotResult {
+  status: string; days: number; incidentCount: number; noiseCount: number;
+  hotspots: Hotspot[]; trends: Array<{ date: string; count: number }>;
+  radiusMeters: number; minSamples: number; generatedAt: string; forecast: false;
+  truncated?: boolean; excludedDemoCount?: number;
+}
+export interface EvaluationMetrics {
+  accuracy: number; precision: number; recall: number; f1: number; averaging: string;
+  labels: string[]; confusionMatrix: number[][];
+  perClass: Record<string, { precision: number; recall: number; 'f1-score': number; support: number }>;
+}
+export interface EvaluationResult {
+  status: string;
+  model: { status: string; modelVersion?: string | null };
+  evaluation: null | {
+    modelVersion: string; algorithm: string; split: string; sampleCount: number;
+    evaluatedAt: string; manifestSha256: string; metrics: Record<string, EvaluationMetrics>;
+    latencyMs: { mean: number; p50: number; p95: number; scope: string }; abstentionCount: number;
+  };
 }

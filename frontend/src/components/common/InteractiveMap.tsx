@@ -1,10 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Incident, LocationData } from '../../types';
+import { Incident, LocationData, Hotspot } from '../../types';
 
 interface InteractiveMapProps {
   incidents?: Incident[];
+  hotspots?: Hotspot[];
   selectedLocation?: LocationData | null;
   onLocationSelect?: (loc: LocationData) => void;
   onIncidentSelect?: (incident: Incident) => void;
@@ -16,6 +17,7 @@ interface InteractiveMapProps {
 
 const DEFAULT_CENTER: [number, number] = [40.730610, -73.935242];
 const EMPTY_INCIDENTS: Incident[] = [];
+const EMPTY_HOTSPOTS: Hotspot[] = [];
 
 const escapeHtml = (value: string) => value.replace(/[&<>'"]/g, (character) => ({
   '&': '&amp;',
@@ -27,6 +29,7 @@ const escapeHtml = (value: string) => value.replace(/[&<>'"]/g, (character) => (
 
 export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   incidents = EMPTY_INCIDENTS,
+  hotspots = EMPTY_HOTSPOTS,
   selectedLocation,
   onLocationSelect,
   onIncidentSelect,
@@ -205,13 +208,18 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       markersRef.current?.addLayer(marker);
     });
 
-    if (incidents.length > 0 && !selectedLocation) {
+    hotspots.forEach(h => {
+      const circle = L.circle([h.lat, h.lng], { radius: h.radiusMeters, color: '#EF4444', fillOpacity: .2, weight: 2 });
+      circle.bindPopup(`<b>${h.count} incidents</b><br/>Main category: ${escapeHtml(h.mainCategory)}`);
+      markersRef.current?.addLayer(circle);
+    });
+    if ((incidents.length > 0 || hotspots.length > 0) && !selectedLocation) {
       const group = new L.FeatureGroup(markersRef.current.getLayers() as L.Layer[]);
       if (group.getBounds().isValid()) {
         mapInstanceRef.current.fitBounds(group.getBounds().pad(0.2));
       }
     }
-  }, [incidents, selectedLocation]);
+  }, [incidents, selectedLocation, hotspots]);
 
   return (
     <div 

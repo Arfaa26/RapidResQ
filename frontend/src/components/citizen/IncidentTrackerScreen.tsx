@@ -7,6 +7,7 @@ import {
   MapPin, 
   Sparkles
 } from 'lucide-react';
+import { formatConfidence } from '../../utils/mlFormatting';
 import confetti from 'canvas-confetti';
 import { Incident, IncidentStatus } from '../../types';
 
@@ -111,6 +112,9 @@ export const IncidentTrackerScreen: React.FC<IncidentTrackerScreenProps> = ({
         </div>
       </div>
 
+      {incident.duplicate && <div className="mb-4 rounded-xl border border-purple-200 bg-purple-50 p-3 text-sm">
+        {incident.duplicate.status === 'POSSIBLE' ? 'Possible duplicate — awaiting authority review:' : incident.duplicate.status === 'CONFIRMED' ? 'Grouped with incident:' : 'Duplicate suggestion rejected:'} {incident.duplicate.of}
+      </div>}
       {/* Real-time Status Progress Pipeline */}
       <div className="bg-white rounded-3xl p-5 shadow-sm mb-4">
         <h3 className="text-xs font-bold text-[#1E1B4B] mb-4 flex items-center justify-between">
@@ -189,7 +193,7 @@ export const IncidentTrackerScreen: React.FC<IncidentTrackerScreenProps> = ({
       <div className="bg-purple-50 border border-purple-100 rounded-3xl p-4 mb-4">
         <div className="flex items-center space-x-2 text-[#5E43F3] text-xs font-extrabold mb-1">
           <Sparkles size={15} />
-          <span>AI Triage Analysis ({Math.round(incident.aiAnalysis.confidence * 100)}% Confidence)</span>
+          <span>Triage analysis ({formatConfidence(incident.aiAnalysis)})</span>
         </div>
         <p className="text-[11px] text-[#4B5563] leading-relaxed mb-2 font-medium">
           {incident.aiAnalysis.reasoning}

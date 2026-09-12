@@ -12,6 +12,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { Incident, LocationData, AIAnalysisResult, IncidentCategory } from '../../types';
+import { MLPredictionDetails } from '../common/MLPredictionDetails';
 import { api } from '../../services/api';
 import { InteractiveMap } from '../common/InteractiveMap';
 import { soundAlerts } from '../../utils/audioAlert';
@@ -30,7 +31,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<IncidentCategory>('CIVIC');
+  const [selectedCategory, setSelectedCategory] = useState<IncidentCategory>('HAZARD');
   const [acquiredLocation, setAcquiredLocation] = useState<LocationData>(currentLocation);
   const selectedLocation = Date.parse(currentLocation.capturedAt || '') >= Date.parse(acquiredLocation.capturedAt || '')
     ? currentLocation : acquiredLocation;
@@ -43,6 +44,8 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
   const [locationError, setLocationError] = useState<string | null>(null);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
 
+  const [aiError, setAiError] = useState('');
+  const [explain, setExplain] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const locationRequestRef = useRef<Promise<LocationData> | null>(null);
 
@@ -81,6 +84,9 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
   }, [refreshAccurateLocation]);
 
   const categories: { id: IncidentCategory; label: string; icon: React.ReactNode; color: string }[] = [
+    { id: 'HAZARD', label: 'Not sure', icon: <ShieldAlert size={14} />, color: 'bg-gray-50' },
+    { id: 'FLOOD', label: 'Flood', icon: <Building size={14} />, color: 'bg-blue-50' },
+    { id: 'MEDICAL', label: 'Medical', icon: <ShieldAlert size={14} />, color: 'bg-red-50' },
     { id: 'FIRE', label: 'Fire & Rescue', icon: <Flame size={14} />, color: 'bg-red-50 text-red-600 border-red-200' },
     { id: 'ACCIDENT', label: 'Road Accident', icon: <Car size={14} />, color: 'bg-orange-50 text-orange-600 border-orange-200' },
     { id: 'CIVIC', label: 'Civic / Pothole', icon: <Building size={14} />, color: 'bg-blue-50 text-blue-600 border-blue-200' },
@@ -98,26 +104,38 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
       setMediaFile(file);
       const url = URL.createObjectURL(file);
       setMediaPreview(url);
-      triggerAiPreview(file, description, selectedCategory);
+
     }
   };
 
-  const triggerAiPreview = async (file?: File, desc?: string, cat?: IncidentCategory) => {
-    try {
-      setIsAnalyzingAi(true);
-      const formData = new FormData();
-      if (file || mediaFile) formData.append('media', file || mediaFile!);
-      if (desc || description) formData.append('description', desc || description);
-      if (cat || selectedCategory) formData.append('categoryHint', cat || selectedCategory);
-
-      const preview = await api.previewAI(formData);
-      setAiPreview(preview);
-    } catch (err) {
-      console.warn('AI preview error', err);
-    } finally {
-      setIsAnalyzingAi(false);
-    }
-  };
+  useEffect(() => {
+    const controller = new AbortController();
+    // Clear outdated predictions as soon as an input changes.
+    // oxlint-disable-next-line react/set-state-in-effect
+    setAiPreview(null);
+    setAiError('');
+    if (!mediaFile && !title.trim() && !description.trim()) { setIsAnalyzingAi(false); return; }
+    setIsAnalyzingAi(true);
+    const timer = window.setTimeout(async () => {
+      const form = new FormData();
+      form.append('title', title);
+      form.append('description', description);
+      form.append('categoryHint', selectedCategory);
+      form.append('lat', String(selectedLocation.lat));
+      form.append('lng', String(selectedLocation.lng));
+      form.append('explain', String(explain));
+      if (mediaFile) form.append('media', mediaFile);
+      try {
+        const result = await api.previewAI(form, controller.signal);
+        if (!controller.signal.aborted) setAiPreview(result);
+      } catch (e) {
+        if (!controller.signal.aborted) setAiError(e instanceof Error ? e.message : 'Analysis unavailable. You can still submit this report.');
+      } finally {
+        if (!controller.signal.aborted) setIsAnalyzingAi(false);
+      }
+    }, 450);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [mediaFile, title, description, selectedCategory, selectedLocation.lat, selectedLocation.lng, explain]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,6 +153,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
       const formData = new FormData();
       if (title) formData.append('title', title);
       formData.append('description', description);
+      formData.append('explain', String(explain));
       formData.append('categoryHint', selectedCategory);
       formData.append('lat', liveLocation.lat.toString());
       formData.append('lng', liveLocation.lng.toString());
@@ -209,7 +228,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
                 <Camera size={22} />
               </div>
               <span className="text-xs font-bold text-[#1E1B4B] mb-0.5">Take Photo or Upload Media</span>
-              <span className="text-[10px] text-gray-500">AI automatically detects hazard type & priority</span>
+              <span className="text-[10px] text-gray-500">ML analysis supports authority review when trained models are available</span>
             </div>
           )}
 
@@ -222,6 +241,11 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
           />
         </div>
 
+        <label className="flex items-center gap-2 px-2 text-sm">
+          <input type="checkbox" checked={explain} onChange={e => setExplain(e.target.checked)} />
+          Include image explanation (Grad-CAM)
+        </label>
+        {aiError && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{aiError} You can still submit for authority review.</p>}
         {/* AI Triage Live Assistant Badge */}
         {(aiPreview || isAnalyzingAi) && (
           <div className="bg-gradient-to-r from-purple-900 via-[#5E43F3] to-[#7B61FF] text-white rounded-2xl p-3.5 shadow-md shadow-purple-500/15">
@@ -238,19 +262,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
                 <span>Extracting visual features, hazard classification & priority...</span>
               </div>
             ) : aiPreview && (
-              <div className="space-y-1.5 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-white/90">Hazard: {aiPreview.hazardType}</span>
-                  <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                    aiPreview.priority === 'CRITICAL' ? 'bg-red-500 text-white' : 'bg-yellow-400 text-black'
-                  }`}>
-                    {aiPreview.priority} PRIORITY
-                  </span>
-                </div>
-                <div className="text-[11px] text-white/80 leading-tight">
-                  Routing: <span className="font-bold underline">{aiPreview.department.replace('_', ' ')}</span>
-                </div>
-              </div>
+              <MLPredictionDetails analysis={aiPreview} compact />
             )}
           </div>
         )}
@@ -267,7 +279,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
                 type="button"
                 onClick={() => {
                   setSelectedCategory(cat.id);
-                  triggerAiPreview(mediaFile || undefined, description, cat.id);
+
                 }}
                 className={`flex items-center space-x-2 p-2.5 rounded-xl border text-xs font-semibold transition-all ${
                   selectedCategory === cat.id
@@ -301,7 +313,6 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
             onChange={(e) => {
               setDescription(e.target.value);
             }}
-            onBlur={() => triggerAiPreview(mediaFile || undefined, description, selectedCategory)}
             className="w-full bg-[#F4F3FA] border-0 rounded-xl p-3.5 text-xs text-[#1E1B4B] placeholder-gray-400 focus:ring-2 focus:ring-[#5E43F3] outline-none resize-none"
           />
         </div>

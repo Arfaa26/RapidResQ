@@ -23,3 +23,13 @@ Thumbs.db
 
 .vercel
 .env*
+!.env.example
+!*/.env.example
+.venv/
+__pycache__/
+.pytest_cache/
+.torch-cache/
+ml-service/models/**/*.pt
+ml-service/models/**/*.joblib
+ml-service/models/**/evaluation.json
+ml-service/datasets/raw/

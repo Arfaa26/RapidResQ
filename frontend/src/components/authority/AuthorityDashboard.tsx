@@ -9,7 +9,6 @@ import {
   CheckCircle2, 
   Truck, 
   RefreshCw, 
-  Sparkles, 
   MapPin,
   Phone,
   User,
@@ -20,6 +19,9 @@ import { Incident, IncidentStatus, DashboardStats } from '../../types';
 import { InteractiveMap } from '../common/InteractiveMap';
 import { api } from '../../services/api';
 import { soundAlerts } from '../../utils/audioAlert';
+import { MLPredictionDetails } from '../common/MLPredictionDetails';
+import { HotspotAnalytics, MLEvaluation } from './MLAnalytics';
+import { DuplicateReview } from './DuplicateReview';
 import confetti from 'canvas-confetti';
 
 interface AuthorityDashboardProps {
@@ -35,6 +37,8 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
   onRefresh,
   onUpdateIncident,
 }) => {
+  const [view, setView] = useState<'incidents' | 'hotspots' | 'evaluation'>('incidents');
+  const [showGrouped, setShowGrouped] = useState(false);
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
@@ -75,6 +79,7 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
 
   // Filtered list
   const filteredIncidents = incidents.filter((inc) => {
+    if (!showGrouped && inc.duplicate?.status === 'CONFIRMED') return false;
     if (selectedDept !== 'ALL' && inc.department !== selectedDept) return false;
     if (selectedStatus !== 'ALL' && inc.status !== selectedStatus) return false;
     return true;
@@ -192,6 +197,20 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
         </div>
       </header>
 
+      <div className="flex flex-wrap gap-3 px-4 pt-4" aria-label="Dashboard views">
+        {(['incidents', 'hotspots', 'evaluation'] as const).map(tab => <button key={tab} onClick={() => setView(tab)} aria-pressed={view === tab}
+          className={`rounded-xl px-4 py-2 text-sm font-bold ${view === tab ? 'bg-purple-600' : 'bg-slate-800'}`}>
+          {tab === 'evaluation' ? 'ML Evaluation' : tab === 'hotspots' ? 'Hotspot Analytics' : 'Incidents'}
+        </button>)}
+      </div>
+      <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 xl:grid-cols-6">
+        {[['Total incidents', stats?.total ?? incidents.length], ['Critical active', criticalCount], ['High active', stats?.highActive ?? 0],
+          ['Pending', stats?.pending ?? 0], ['Resolved', stats?.resolved ?? 0], ['Possible duplicates', stats?.possibleDuplicates ?? 0]].map(([label, count]) =>
+          <div key={label} className="rounded-xl border border-slate-700 bg-slate-800 p-3 text-sm"><p>{label}</p><p className="mt-2 text-xl font-bold">{count}</p></div>)}
+      </div>
+      {view === 'hotspots' && <HotspotAnalytics revision={incidents.map(i => i.id + i.updatedAt).join('|')} />}
+      {view === 'evaluation' && <MLEvaluation />}
+      {view === 'incidents' && <>
       {/* 2. Department Filter Navigation Bar */}
       <div className="bg-[#1E293B]/70 border-b border-slate-800 px-4 py-2.5 flex flex-col gap-3">
         <div className="flex gap-2 overflow-x-auto pb-1">
@@ -222,6 +241,7 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
 
         {/* Status Filter */}
         <div className="flex flex-wrap items-center gap-2 text-xs">
+          <label className="mr-3 flex items-center gap-2 text-sm"><input type="checkbox" checked={showGrouped} onChange={e => setShowGrouped(e.target.checked)} />Show grouped reports</label>
           <span className="text-slate-400 font-medium">Status:</span>
           {['ALL', 'PENDING', 'ACKNOWLEDGED', 'IN_PROGRESS', 'RESOLVED'].map((st) => (
             <button
@@ -307,7 +327,7 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
                     <span>{new Date(inc.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                   <span className="mt-3 flex items-center gap-1 text-xs font-bold text-purple-300">
-                    Open report <ArrowRight size={14} />
+                    {inc.reportCount ?? 1} reports · {inc.duplicate?.status === 'POSSIBLE' ? 'Possible duplicate · ' : ''}Open report <ArrowRight size={14} />
                   </span>
                 </button>
               );
@@ -339,6 +359,7 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
         </div>
       </div>
 
+      </>}
       <dialog
         ref={detailsDialogRef}
         aria-labelledby={detailsTitleId}
@@ -400,6 +421,7 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
                 <p className="whitespace-pre-wrap break-words text-sm text-white">{selectedIncident.description}</p>
               </section>
 
+              <DuplicateReview key={selectedIncident.id} incident={selectedIncident} incidents={incidents} onUpdate={onUpdateIncident} onOpen={openIncident} />
               {/* Dispatch Action Panel */}
               <div className="bg-slate-900/80 border border-slate-700 rounded-xl p-4 space-y-3">
                 <div className="text-xs font-bold text-white flex items-center justify-between">
@@ -446,7 +468,7 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
                 {/* Status action buttons */}
                 <div className="flex flex-wrap gap-2 pt-1">
                   <button
-                    disabled={isUpdating || selectedIncident.status === 'ACKNOWLEDGED'}
+                    disabled={isUpdating || selectedIncident.duplicate?.status === 'CONFIRMED' || selectedIncident.status === 'ACKNOWLEDGED'}
                     onClick={() => handleStatusChange('ACKNOWLEDGED')}
                     className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-xs font-bold py-2.5 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1 cursor-pointer"
                   >
@@ -455,7 +477,7 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
                   </button>
 
                   <button
-                    disabled={isUpdating || selectedIncident.status === 'IN_PROGRESS'}
+                    disabled={isUpdating || selectedIncident.duplicate?.status === 'CONFIRMED' || selectedIncident.status === 'IN_PROGRESS'}
                     onClick={() => handleStatusChange('IN_PROGRESS')}
                     className="flex-1 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white text-xs font-bold py-2.5 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1 cursor-pointer"
                   >
@@ -464,7 +486,7 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
                   </button>
 
                   <button
-                    disabled={isUpdating || selectedIncident.status === 'RESOLVED'}
+                    disabled={isUpdating || selectedIncident.duplicate?.status === 'CONFIRMED' || selectedIncident.status === 'RESOLVED'}
                     onClick={() => handleStatusChange('RESOLVED')}
                     className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-bold py-2.5 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1 cursor-pointer"
                   >
@@ -536,38 +558,8 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
                   )}
                 </div>
 
-                {/* AI Triage Report */}
-                <div className="bg-gradient-to-br from-purple-950/40 via-slate-900 to-indigo-950/40 border border-purple-800/40 rounded-xl p-4 flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-2 text-purple-400 font-extrabold text-xs">
-                        <Sparkles size={16} />
-                        <span>AI Triage Inspection</span>
-                      </div>
-                      <span className="text-[10px] bg-purple-500/20 text-purple-300 font-bold px-2 py-0.5 rounded-full border border-purple-500/30">
-                        {Math.round(selectedIncident.aiAnalysis.confidence * 100)}% Confidence
-                      </span>
-                    </div>
-
-                    <div className="text-xs text-white font-bold mb-1">
-                      Hazard: {selectedIncident.aiAnalysis.hazardType}
-                    </div>
-                    <p className="text-[11px] text-slate-300 leading-relaxed mb-3">
-                      {selectedIncident.aiAnalysis.reasoning}
-                    </p>
-
-                    <div className="text-[11px] bg-slate-900/80 border border-purple-500/30 text-purple-200 p-2.5 rounded-lg mb-2">
-                      <span className="font-bold">Recommended Protocol:</span> {selectedIncident.aiAnalysis.recommendedAction}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {selectedIncident.aiAnalysis.extractedKeywords.map((kw, i) => (
-                      <span key={i} className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-md">
-                        #{kw}
-                      </span>
-                    ))}
-                  </div>
+                <div className="rounded-xl border border-purple-800/40 bg-slate-900 p-4">
+                  <MLPredictionDetails analysis={selectedIncident.aiAnalysis} />
                 </div>
               </div>
 

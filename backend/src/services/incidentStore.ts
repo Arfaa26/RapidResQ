@@ -1,5 +1,6 @@
 import { Incident, IncidentStatus, AssignedUnit } from '../types/index.js';
 import { getDatabase } from './database.js';
+import { presentIncident, resolveGroupedReports } from './presentIncident.js';
 
 class IncidentStore {
   private incidents: Map<string, Incident> = new Map();
@@ -31,7 +32,7 @@ class IncidentStore {
           isAnonymous: false,
         },
         aiAnalysis: {
-          confidence: 0.98,
+          confidence: null,
           detectedCategory: 'FIRE',
           priority: 'CRITICAL',
           department: 'FIRE_DEPARTMENT',
@@ -94,7 +95,7 @@ class IncidentStore {
           isAnonymous: false,
         },
         aiAnalysis: {
-          confidence: 0.95,
+          confidence: null,
           detectedCategory: 'ACCIDENT',
           priority: 'CRITICAL',
           department: 'EMS_AMBULANCE',
@@ -150,7 +151,7 @@ class IncidentStore {
           isAnonymous: true,
         },
         aiAnalysis: {
-          confidence: 0.94,
+          confidence: null,
           detectedCategory: 'CIVIC',
           priority: 'MEDIUM',
           department: 'MUNICIPALITY',
@@ -192,7 +193,7 @@ class IncidentStore {
           isAnonymous: false,
         },
         aiAnalysis: {
-          confidence: 0.96,
+          confidence: null,
           detectedCategory: 'CIVIC',
           priority: 'HIGH',
           department: 'MUNICIPALITY',
@@ -243,7 +244,13 @@ class IncidentStore {
       }
     ];
 
-    seed.forEach(inc => this.incidents.set(inc.id, inc));
+    seed.forEach(inc => {
+      inc.isDemo = true;
+      inc.reportCount = 1;
+      inc.aiAnalysis = { ...inc.aiAnalysis, confidence: null, source: 'demo', status: 'demo', needsReview: true,
+        reasoning: 'Seeded demonstration scenario; no trained model was used.' };
+      this.incidents.set(inc.id, inc);
+    });
   }
 
   public async getAllIncidents(filters?: { department?: string; status?: string; priority?: string }): Promise<Incident[]> {
@@ -252,6 +259,7 @@ class IncidentStore {
       ? (await sql`SELECT data FROM rapidresq_incidents ORDER BY data->>'createdAt' DESC`).map((row) => row.data as Incident)
       : Array.from(this.incidents.values());
 
+    list = resolveGroupedReports(list);
     if (filters?.department && filters.department !== 'ALL') {
       list = list.filter(i => i.department === filters.department);
     }
@@ -268,8 +276,13 @@ class IncidentStore {
 
   public async getIncidentById(id: string): Promise<Incident | undefined> {
     const sql = await getDatabase();
-    if (sql) return (await sql`SELECT data FROM rapidresq_incidents WHERE id = ${id}`)[0]?.data as Incident | undefined;
-    return this.incidents.get(id);
+    const incident = sql ? (await sql`SELECT data FROM rapidresq_incidents WHERE id = ${id}`)[0]?.data as Incident | undefined : this.incidents.get(id);
+    if (!incident) return undefined;
+    if (incident.duplicate?.status === 'CONFIRMED') {
+      const parent = sql ? (await sql`SELECT data FROM rapidresq_incidents WHERE id = ${incident.duplicate.of}`)[0]?.data as Incident | undefined : this.incidents.get(incident.duplicate.of);
+      if (parent) return resolveGroupedReports([incident, parent])[0];
+    }
+    return presentIncident(incident);
   }
 
   public async createIncident(incident: Incident): Promise<Incident> {
@@ -326,7 +339,8 @@ class IncidentStore {
   }
 
   public async getStats() {
-    const list = await this.getAllIncidents();
+    const all = await this.getAllIncidents();
+    const list = all.filter(i => i.duplicate?.status !== 'CONFIRMED');
     const criticalCount = list.filter(i => i.priority === 'CRITICAL' && i.status !== 'RESOLVED').length;
     const pendingCount = list.filter(i => i.status === 'PENDING').length;
     const inProgressCount = list.filter(i => i.status === 'IN_PROGRESS' || i.status === 'ACKNOWLEDGED').length;
@@ -345,9 +359,82 @@ class IncidentStore {
       pending: pendingCount,
       inProgress: inProgressCount,
       resolved: resolvedCount,
-      avgResponseMinutes: 4.2,
+      highActive: list.filter(i => i.priority === 'HIGH' && i.status !== 'RESOLVED').length,
+      possibleDuplicates: list.filter(i => i.duplicate?.status === 'POSSIBLE').length,
+      totalReports: all.length,
+      avgResponseMinutes: (() => {
+        const delays = list.flatMap(i => {
+          const event = i.timeline.find(t => t.status === 'ACKNOWLEDGED');
+          const minutes = event ? (Date.parse(event.timestamp) - Date.parse(i.createdAt)) / 60000 : -1;
+          return minutes >= 0 ? [minutes] : [];
+        });
+        return delays.length ? delays.reduce((a, b) => a + b, 0) / delays.length : null;
+      })(),
       byDepartment,
     };
+  }
+
+  public async reviewDuplicate(id: string, decision: 'CONFIRM' | 'REJECT', reviewedBy: string): Promise<Incident | null> {
+    const sql = await getDatabase();
+    const now = new Date().toISOString();
+    const event = { id: `TL-${crypto.randomUUID()}`, timestamp: now, status: 'PENDING',
+      note: decision === 'CONFIRM' ? 'Authority confirmed duplicate. Original report and media retained.' : 'Authority rejected duplicate suggestion; report remains independent.', updatedBy: reviewedBy };
+    if (sql) {
+      if (decision === 'REJECT') {
+        const rows = await sql`UPDATE rapidresq_incidents SET data = data
+          || jsonb_build_object('duplicate', (data->'duplicate') || jsonb_build_object('status', 'REJECTED', 'reviewedAt', ${now}::text, 'reviewedBy', ${reviewedBy}::text),
+             'updatedAt', ${now}::text, 'timeline', COALESCE(data->'timeline', '[]'::jsonb) || ${JSON.stringify([event])}::jsonb)
+          WHERE id = ${id} AND data#>>'{duplicate,status}' = 'POSSIBLE' RETURNING data`;
+        return rows[0]?.data as Incident ?? null;
+      }
+      // Lock both records in a stable order. A single atomic statement makes retries
+      // idempotent and prevents lost increments when different reports share a target.
+      const rows = await sql`WITH locked AS MATERIALIZED (
+          SELECT id, data FROM rapidresq_incidents
+          WHERE id = ${id} OR id = (SELECT data#>>'{duplicate,of}' FROM rapidresq_incidents WHERE id = ${id})
+          ORDER BY id FOR UPDATE
+        ), eligible AS MATERIALIZED (
+          SELECT child.id AS child_id, child.data AS child_data, parent.id AS parent_id, parent.data AS parent_data
+          FROM locked child JOIN locked parent ON parent.id = child.data#>>'{duplicate,of}'
+          WHERE child.id = ${id} AND child.id <> parent.id
+            AND child.data#>>'{duplicate,status}' = 'POSSIBLE'
+            AND COALESCE(child.data->>'reportCount', '1')::int = 1
+            AND COALESCE(parent.data#>>'{duplicate,status}', '') NOT IN ('POSSIBLE', 'CONFIRMED')
+            AND parent.data->>'status' <> 'RESOLVED'
+        ), parent_update AS (
+          UPDATE rapidresq_incidents target SET data = eligible.parent_data
+            || jsonb_build_object('reportCount', COALESCE((eligible.parent_data->>'reportCount')::int, 1) + 1,
+                 'updatedAt', ${now}::text,
+                 'priority', CASE WHEN array_position(ARRAY['LOW','MEDIUM','HIGH','CRITICAL'], eligible.child_data->>'priority')
+                   > array_position(ARRAY['LOW','MEDIUM','HIGH','CRITICAL'], eligible.parent_data->>'priority')
+                   THEN eligible.child_data->>'priority' ELSE eligible.parent_data->>'priority' END,
+                 'timeline', COALESCE(eligible.parent_data->'timeline', '[]'::jsonb)
+                   || jsonb_build_array(${JSON.stringify({ ...event, note: `Additional report ${id} confirmed; highest reported priority retained. Review combined evidence.` })}::jsonb))
+          FROM eligible WHERE target.id = eligible.parent_id RETURNING target.id
+        ) UPDATE rapidresq_incidents target SET data = eligible.child_data
+          || jsonb_build_object('duplicate', (eligible.child_data->'duplicate')
+               || jsonb_build_object('status', 'CONFIRMED', 'reviewedAt', ${now}::text, 'reviewedBy', ${reviewedBy}::text),
+               'updatedAt', ${now}::text, 'timeline', COALESCE(eligible.child_data->'timeline', '[]'::jsonb) || ${JSON.stringify([event])}::jsonb)
+          FROM eligible, parent_update WHERE target.id = eligible.child_id RETURNING target.data`;
+      return rows[0]?.data as Incident ?? null;
+    }
+    // No awaits inside the in-memory mutation, so concurrent requests cannot interleave it.
+    const child = this.incidents.get(id);
+    if (!child || child.duplicate?.status !== 'POSSIBLE') return null;
+    const parent = this.incidents.get(child.duplicate.of);
+    if (decision === 'CONFIRM') {
+      if (!parent || parent.id === id || parent.status === 'RESOLVED' || (child.reportCount ?? 1) !== 1
+        || ['POSSIBLE', 'CONFIRMED'].includes(parent.duplicate?.status || '')) return null;
+      parent.reportCount = (parent.reportCount ?? 1) + 1;
+      const order = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+      if (order.indexOf(child.priority) > order.indexOf(parent.priority)) parent.priority = child.priority;
+      parent.updatedAt = now;
+      parent.timeline.push({ ...event, status: parent.status, note: `Additional report ${id} confirmed; highest reported priority retained. Review combined evidence.` });
+    }
+    child.duplicate = { ...child.duplicate, status: decision === 'CONFIRM' ? 'CONFIRMED' : 'REJECTED', reviewedAt: now, reviewedBy };
+    child.updatedAt = now;
+    child.timeline.push({ ...event, status: child.status });
+    return child;
   }
 
   public async resetDemoData() {

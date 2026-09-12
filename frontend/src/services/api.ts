@@ -1,4 +1,4 @@
-import { Incident, DashboardStats, AIAnalysisResult } from '../types';
+import { Incident, DashboardStats, AIAnalysisResult, HotspotResult, EvaluationResult } from '../types';
 
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? '';
 const API_BASE = `${configuredBaseUrl}/api`;
@@ -40,8 +40,9 @@ export const api = {
     return data.incident;
   },
 
-  async previewAI(formData: FormData): Promise<AIAnalysisResult> {
+  async previewAI(formData: FormData, signal?: AbortSignal): Promise<AIAnalysisResult> {
     const data = await request<{ aiAnalysis: AIAnalysisResult }>(`${API_BASE}/ai/preview`, {
+      signal,
       method: 'POST',
       body: formData,
     });
@@ -83,6 +84,17 @@ export const api = {
     return data.stats;
   },
 
+  async getHotspots(days: number): Promise<HotspotResult> {
+    return (await request<{ analytics: HotspotResult }>(`${API_BASE}/analytics/hotspots?days=${days}`)).analytics;
+  },
+  async getEvaluation(): Promise<Record<string, EvaluationResult>> {
+    return (await request<{ models: Record<string, EvaluationResult> }>(`${API_BASE}/ml/evaluation`)).models;
+  },
+  async reviewDuplicate(id: string, decision: 'CONFIRM' | 'REJECT'): Promise<Incident> {
+    return (await request<{ incident: Incident }>(`${API_BASE}/incidents/${id}/duplicate`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ decision }),
+    })).incident;
+  },
   async resetSeed(): Promise<void> {
     await request<{ success: boolean }>(`${API_BASE}/seed`, { method: 'POST' });
   }

@@ -19,7 +19,6 @@ import { IncidentTrackerScreen } from './components/citizen/IncidentTrackerScree
 import { CommunityAlertsScreen } from './components/citizen/CommunityAlertsScreen';
 import { AuthorityDashboard } from './components/authority/AuthorityDashboard';
 import { DeveloperSection } from './components/developer/DeveloperSection';
-
 import { locationService } from './services/locationService';
 
 type CitizenScreen = 'ONBOARDING' | 'HOME' | 'ACTIVE_SOS' | 'REPORT' | 'TRACKING' | 'ALERTS';
@@ -35,9 +34,17 @@ export function App() {
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [isSendingSos, setIsSendingSos] = useState(false);
+  const [reportInitialMedia, setReportInitialMedia] = useState<File | null>(null);
+  const [reportCaptureMode, setReportCaptureMode] = useState<'photo' | 'video' | null>(null);
   const sendingSosRef = useRef(false);
   const loadingRef = useRef(false);
   const dataVersionRef = useRef(0);
+
+  const handleNavigateReport = (media?: File, mode?: 'photo' | 'video') => {
+    setReportInitialMedia(media || null);
+    setReportCaptureMode(mode || null);
+    setCitizenScreen('REPORT');
+  };
 
   // Live GPS Location of the user
   const [userLocation, setUserLocation] = useState<LocationData>({
@@ -327,7 +334,7 @@ export function App() {
               {citizenScreen === 'HOME' && (
                 <HomeScreen
                   onTriggerSos={handleTriggerSos}
-                  onNavigateReport={() => setCitizenScreen('REPORT')}
+                  onNavigateReport={handleNavigateReport}
                   onNavigateAlerts={() => setCitizenScreen('ALERTS')}
                   onSelectIncident={(inc) => {
                     setSelectedIncident(inc);
@@ -348,8 +355,18 @@ export function App() {
               {citizenScreen === 'REPORT' && (
                 <ReportIncidentScreen
                   currentLocation={userLocation}
-                  onBack={() => setCitizenScreen('HOME')}
-                  onIncidentSubmitted={handleIncidentSubmitted}
+                  initialMedia={reportInitialMedia}
+                  initialCaptureMode={reportCaptureMode}
+                  onBack={() => {
+                    setReportInitialMedia(null);
+                    setReportCaptureMode(null);
+                    setCitizenScreen('HOME');
+                  }}
+                  onIncidentSubmitted={(created) => {
+                    setReportInitialMedia(null);
+                    setReportCaptureMode(null);
+                    handleIncidentSubmitted(created);
+                  }}
                 />
               )}
               {citizenScreen === 'TRACKING' && selectedIncident && (
@@ -401,7 +418,7 @@ export function App() {
                 {citizenScreen === 'HOME' && (
                   <HomeScreen
                     onTriggerSos={handleTriggerSos}
-                    onNavigateReport={() => setCitizenScreen('REPORT')}
+                    onNavigateReport={handleNavigateReport}
                     onNavigateAlerts={() => setCitizenScreen('ALERTS')}
                     onSelectIncident={(inc) => {
                       setSelectedIncident(inc);
@@ -422,8 +439,18 @@ export function App() {
                 {citizenScreen === 'REPORT' && (
                   <ReportIncidentScreen
                     currentLocation={userLocation}
-                    onBack={() => setCitizenScreen('HOME')}
-                    onIncidentSubmitted={handleIncidentSubmitted}
+                    initialMedia={reportInitialMedia}
+                    initialCaptureMode={reportCaptureMode}
+                    onBack={() => {
+                      setReportInitialMedia(null);
+                      setReportCaptureMode(null);
+                      setCitizenScreen('HOME');
+                    }}
+                    onIncidentSubmitted={(created) => {
+                      setReportInitialMedia(null);
+                      setReportCaptureMode(null);
+                      handleIncidentSubmitted(created);
+                    }}
                   />
                 )}
                 {citizenScreen === 'TRACKING' && selectedIncident && (

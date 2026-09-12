@@ -24,12 +24,16 @@ interface ReportIncidentScreenProps {
   onBack: () => void;
   onIncidentSubmitted: (incident: Incident) => void;
   currentLocation: LocationData;
+  initialMedia?: File | null;
+  initialCaptureMode?: 'photo' | 'video' | null;
 }
 
 export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
   onBack,
   onIncidentSubmitted,
   currentLocation,
+  initialMedia = null,
+  initialCaptureMode = null,
 }) => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -37,8 +41,8 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
   const [acquiredLocation, setAcquiredLocation] = useState<LocationData>(currentLocation);
   const selectedLocation = Date.parse(currentLocation.capturedAt || '') >= Date.parse(acquiredLocation.capturedAt || '')
     ? currentLocation : acquiredLocation;
-  const [mediaFile, setMediaFile] = useState<File | null>(null);
-  const [mediaPreview, setMediaPreview] = useState<string | null>(null);
+  const [mediaFile, setMediaFile] = useState<File | null>(initialMedia);
+  const [mediaPreview, setMediaPreview] = useState<string | null>(() => (initialMedia ? URL.createObjectURL(initialMedia) : null));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [aiPreview, setAiPreview] = useState<AIAnalysisResult | null>(null);
   const [isAnalyzingAi, setIsAnalyzingAi] = useState(false);
@@ -56,6 +60,12 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
 
   const [isManualCategory, setIsManualCategory] = useState(false);
   const isManualCategoryRef = useRef(false);
+
+  useEffect(() => {
+    if (initialCaptureMode && !initialMedia && fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  }, [initialCaptureMode, initialMedia]);
 
   const aiSuggestedCategory: IncidentCategory | null = React.useMemo(() => {
     if (!aiPreview) return null;
@@ -183,8 +193,9 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
-    if (!description && !mediaFile) {
-      alert('Please add a description or photo of the incident.');
+    const finalDescription = description.trim() || (mediaFile ? 'Citizen captured emergency scene evidence.' : '');
+    if (!finalDescription && !mediaFile) {
+      alert('Please add a photo/video or description of the incident.');
       return;
     }
 
@@ -193,9 +204,16 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
       setSubmissionError(null);
       const liveLocation = await locationService.getReportLocation();
       setAcquiredLocation(liveLocation);
+
+      const autoTitle = title.trim() || (
+        aiPreview?.hazardType && aiPreview.hazardType !== 'HAZARD'
+          ? `${aiPreview.hazardType} near ${liveLocation.address.split(',')[0]}`
+          : `${categories.find(c => c.id === selectedCategory)?.label || 'Emergency Incident'} near ${liveLocation.address.split(',')[0]}`
+      );
+
       const formData = new FormData();
-      if (title) formData.append('title', title);
-      formData.append('description', description);
+      formData.append('title', autoTitle);
+      formData.append('description', finalDescription);
       formData.append('explain', String(explain));
       formData.append('categoryHint', selectedCategory);
       formData.append('lat', liveLocation.lat.toString());
@@ -451,12 +469,21 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full bg-[#5E43F3] hover:bg-[#4E33EC] active:scale-[0.98] transition-all text-white font-semibold py-4 px-6 rounded-full flex items-center justify-between shadow-lg shadow-purple-500/25 cursor-pointer disabled:opacity-50"
+          className="w-full bg-gradient-to-r from-[#5E43F3] via-[#6D52F7] to-[#7B61FF] hover:from-[#4E33EC] hover:to-[#6B51EF] active:scale-[0.98] transition-all text-white font-semibold py-4 px-5 rounded-2xl flex items-center justify-between shadow-lg shadow-purple-500/25 cursor-pointer disabled:opacity-50 border border-purple-400/30"
         >
-          <span className="text-sm font-bold pl-2">
-            {isSubmitting ? (isLocating ? 'Getting location...' : 'Sending report...') : 'Submit Incident Report'}
-          </span>
-          <div className="w-10 h-10 rounded-full bg-white text-[#5E43F3] flex items-center justify-center shadow-md">
+          <div className="flex flex-col text-left pl-1">
+            <span className="text-sm font-black tracking-wide">
+              {isSubmitting
+                ? (isLocating ? 'Acquiring Precise GPS…' : 'Dispatching Emergency Report…')
+                : aiPreview?.department
+                ? `🚀 Dispatch to ${aiPreview.department.replace('_', ' ')}`
+                : '🚀 Submit Emergency Report'}
+            </span>
+            <span className="text-[10px] text-white/80 font-medium">
+              {isSubmitting ? 'Sending location & evidence' : 'Direct authority notification with live GPS'}
+            </span>
+          </div>
+          <div className="w-10 h-10 rounded-full bg-white text-[#5E43F3] flex items-center justify-center shadow-md flex-shrink-0 ml-2">
             {isSubmitting ? (
               <Loader2 size={18} className="animate-spin" />
             ) : (

@@ -128,14 +128,46 @@ def analyze_bytes(raw, mime, title, description, category_hint, explain, context
     image_result = {'status': 'not_provided', 'top3': [], 'probabilities': None}
     video_result = None
     if prepared['kind'] == 'image':
-        image_result = (as_visual_prediction(prepared['disaster']) if prepared['disaster']['status'] == 'ready'
-                        else app.state.image.predict(prepared['image'], explain=explain))
+        disaster = prepared.get('disaster')
+        if disaster and disaster.get('status') == 'ready' and not disaster.get('lowConfidence') and disaster.get('predictedLabel') not in ('not_disaster', 'other_disaster'):
+            image_result = as_visual_prediction(disaster)
+        else:
+            image_result = app.state.image.predict(prepared['image'], explain=explain)
+            if prepared.get('objects') and image_result.get('status') == 'ready':
+                detected_labels = [d['label'] for frame in prepared['objects'] for d in frame.get('detections', [])]
+                vehicle_count = sum(1 for label in detected_labels if label in ('car', 'truck', 'bus', 'motorcycle', 'bicycle'))
+                if vehicle_count >= 1 and image_result.get('probabilities'):
+                    probs = dict(image_result['probabilities'])
+                    if 'ACCIDENT' in probs and probs['ACCIDENT'] > 0.10:
+                        probs['ACCIDENT'] = min(0.95, probs['ACCIDENT'] + (0.25 if vehicle_count >= 2 else 0.15))
+                        total = sum(probs.values())
+                        image_result['probabilities'] = {k: v / total for k, v in probs.items()}
+                        order = sorted(probs, key=probs.get, reverse=True)
+                        image_result['top3'] = [{'label': k, 'probability': image_result['probabilities'][k]} for k in order[:3]]
+                        image_result['label'] = order[0]
+                        image_result['confidence'] = image_result['probabilities'][order[0]]
+                        if order[0] != 'HAZARD' and image_result['confidence'] >= 0.50:
+                            image_result['uncertain'] = False
     elif prepared['kind'] == 'video':
-        if prepared.get('disaster', {}).get('status') == 'ready' and not prepared['disaster'].get('lowConfidence') and prepared['disaster'].get('predictedLabel') != 'not_disaster':
-            image_result = as_visual_prediction(prepared['disaster'])
+        disaster = prepared.get('disaster')
+        if disaster and disaster.get('status') == 'ready' and not disaster.get('lowConfidence') and disaster.get('predictedLabel') not in ('not_disaster', 'other_disaster'):
+            image_result = as_visual_prediction(disaster)
             _, video_result = analyze_frames(prepared['sample'], app.state.image, app.state.temporal)
         else:
             image_result, video_result = analyze_frames(prepared['sample'], app.state.image, app.state.temporal)
+            if prepared.get('objects') and image_result.get('status') == 'ready':
+                detected_labels = [d['label'] for frame in prepared['objects'] for d in frame.get('detections', [])]
+                vehicle_count = sum(1 for label in detected_labels if label in ('car', 'truck', 'bus', 'motorcycle', 'bicycle'))
+                if vehicle_count >= 1 and image_result.get('probabilities'):
+                    probs = dict(image_result['probabilities'])
+                    if 'ACCIDENT' in probs and probs['ACCIDENT'] > 0.10:
+                        probs['ACCIDENT'] = min(0.95, probs['ACCIDENT'] + (0.25 if vehicle_count >= 2 else 0.15))
+                        total = sum(probs.values())
+                        image_result['probabilities'] = {k: v / total for k, v in probs.items()}
+                        order = sorted(probs, key=probs.get, reverse=True)
+                        image_result['top3'] = [{'label': k, 'probability': image_result['probabilities'][k]} for k in order[:3]]
+                        image_result['label'] = order[0]
+                        image_result['confidence'] = image_result['probabilities'][order[0]]
     elif prepared['kind'] != 'none':
         image_result = {'status': prepared['kind'], 'top3': [], 'probabilities': None,
                         'explanation': prepared.get('explanation')}

@@ -83,6 +83,35 @@ class MedicClassifier:
                 'No disaster is suggested by this image. This does not rule out a medical, crime or other emergency.' if normal else
                 'Disaster category suggested by the MEDIC-trained model. Authority verification required.'}
 
+    def predict_frames(self, images):
+        if self.model is None or not images:
+            return {**self.status(), 'incidentType': None, 'confidence': None, 'needsReview': True}
+        frame_preds = [self.predict(img) for img in images]
+        if any(p['status'] != 'ready' for p in frame_preds):
+            return {**self.status(), 'incidentType': None, 'confidence': None, 'needsReview': True}
+        scores = {label: sum(p['probabilities'][label] for p in frame_preds) / len(frame_preds) for label in LABELS}
+        winner = max(range(len(LABELS)), key=lambda i: scores[LABELS[i]])
+        confidence = scores[LABELS[winner]]
+        low = confidence < self.threshold
+        normal = LABELS[winner] == 'not_disaster'
+        return {
+            **self.status(),
+            'incidentType': None if low else DISPLAY[winner],
+            'predictedLabel': LABELS[winner],
+            'candidateType': DISPLAY[winner],
+            'confidence': confidence,
+            'lowConfidence': low,
+            'probabilities': scores,
+            'needsReview': True,
+            'calibration': 'validation_temperature_scaling',
+            'routingCategory': ROUTING[winner],
+            'message': (
+                'Low confidence — Manual verification required.' if low else
+                'No disaster is suggested across sampled video frames. This does not rule out other emergencies.' if normal else
+                'Disaster category suggested by the MEDIC-trained model across sampled video frames. Authority verification required.'
+            )
+        }
+
 
 def as_visual_prediction(prediction):
     """Preserve existing category storage; keep exact MEDIC subtype separately in aiAnalysis.disaster."""

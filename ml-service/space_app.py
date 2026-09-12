@@ -66,7 +66,7 @@ def analysis_request(payload):
             raise
         return service.analyze_bytes(None, request.mimeType, request.title, request.description,
             request.categoryHint, request.explain, context, prepared=prepared,
-            text_override={'status': 'unavailable', 'explanation': 'Text analysis is temporarily unavailable. The MEDIC photo prediction is retained; urgency requires manual review.'})
+            text_override={'status': 'unavailable', 'explanation': 'Text analysis is temporarily unavailable. The MEDIC visual prediction is retained; urgency requires manual review.'})
 
 
 @spaces.GPU(duration=15)

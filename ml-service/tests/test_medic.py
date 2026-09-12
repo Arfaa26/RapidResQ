@@ -38,3 +38,12 @@ def test_normal_is_not_proof_that_no_emergency_exists():
                   'probabilities': {k: .9 if k == 'not_disaster' else .1 / 6 for k in LABELS},
                   'message': 'No disaster suggested; other emergencies are still possible.'}
     assert as_visual_prediction(prediction)['uncertain'] is True
+
+
+def test_medic_predict_frames_handles_empty_or_uninitialized(tmp_path):
+    classifier = MedicClassifier(tmp_path)
+    res = classifier.predict_frames([])
+    assert res['status'] == 'training_required'
+    assert res['incidentType'] is None
+    res2 = classifier.predict_frames([Image.new('RGB', (64, 64))])
+    assert res2['status'] == 'training_required'

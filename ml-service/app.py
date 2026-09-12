@@ -98,7 +98,11 @@ def prepare_media(raw, mime):
             sample = sample_video(raw)
             evidence = [{**app.state.detector.predict(image), 'timestampSeconds': timestamp}
                         for timestamp, image in sample['frames']]
-            prepared.update(kind='video', sample=sample, objects=evidence)
+            disaster_res = app.state.medic.predict_frames([image for _, image in sample['frames']])
+            if disaster_res.get('status') == 'ready':
+                disaster_res['frames'] = [{**app.state.medic.predict(image), 'timestampSeconds': timestamp}
+                                          for timestamp, image in sample['frames']]
+            prepared.update(kind='video', sample=sample, objects=evidence, disaster=disaster_res)
         except VideoError as error:
             prepared.update(kind='invalid_video', explanation=str(error))
     elif raw and mime.startswith('image/'):
@@ -127,7 +131,11 @@ def analyze_bytes(raw, mime, title, description, category_hint, explain, context
         image_result = (as_visual_prediction(prepared['disaster']) if prepared['disaster']['status'] == 'ready'
                         else app.state.image.predict(prepared['image'], explain=explain))
     elif prepared['kind'] == 'video':
-        image_result, video_result = analyze_frames(prepared['sample'], app.state.image, app.state.temporal)
+        if prepared.get('disaster', {}).get('status') == 'ready' and not prepared['disaster'].get('lowConfidence') and prepared['disaster'].get('predictedLabel') != 'not_disaster':
+            image_result = as_visual_prediction(prepared['disaster'])
+            _, video_result = analyze_frames(prepared['sample'], app.state.image, app.state.temporal)
+        else:
+            image_result, video_result = analyze_frames(prepared['sample'], app.state.image, app.state.temporal)
     elif prepared['kind'] != 'none':
         image_result = {'status': prepared['kind'], 'top3': [], 'probabilities': None,
                         'explanation': prepared.get('explanation')}

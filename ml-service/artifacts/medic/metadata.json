@@ -1,0 +1,169 @@
+{
+  "dataset": "MEDIC",
+  "modelVersion": "medic-mobilenetv3-2da51433fcc6",
+  "trained": true,
+  "labels": [
+    "earthquake",
+    "flood",
+    "hurricane",
+    "fire",
+    "landslide",
+    "not_disaster",
+    "other_disaster"
+  ],
+  "architecture": "Frozen ImageNet MobileNetV3-Small + MEDIC-trained 576-to-7 linear softmax head",
+  "backboneWeights": "MobileNet_V3_Small_Weights.IMAGENET1K_V1",
+  "weightsSha256": "2da51433fcc68c337eef21f1900bdd5a3ea7ee06fdd09b741d2f7762090b9967",
+  "datasetRevision": "bc2e6f3c99f511ce89055cad5a661c69e43ec6de",
+  "manifestSha256": "5ab870d7ddae1835c729b42a95dd6376d34d414002060fbe47091131d336e5e6",
+  "license": "CC-BY-NC-SA-4.0",
+  "source": "https://crisisnlp.qcri.org/medic/",
+  "threshold": 0.7,
+  "seed": 42,
+  "temperature": 1.3504265546798706,
+  "trainingHistory": [
+    {
+      "epoch": 1,
+      "validationMacroF1": 0.48277652038700225
+    },
+    {
+      "epoch": 2,
+      "validationMacroF1": 0.49673378136390706
+    },
+    {
+      "epoch": 3,
+      "validationMacroF1": 0.5070191486663386
+    },
+    {
+      "epoch": 4,
+      "validationMacroF1": 0.5049174648202486
+    },
+    {
+      "epoch": 5,
+      "validationMacroF1": 0.519018213503275
+    },
+    {
+      "epoch": 6,
+      "validationMacroF1": 0.5144163146888175
+    },
+    {
+      "epoch": 7,
+      "validationMacroF1": 0.52099525978253
+    },
+    {
+      "epoch": 8,
+      "validationMacroF1": 0.522434894766928
+    },
+    {
+      "epoch": 9,
+      "validationMacroF1": 0.5143421829587896
+    },
+    {
+      "epoch": 10,
+      "validationMacroF1": 0.5171254956273388
+    },
+    {
+      "epoch": 11,
+      "validationMacroF1": 0.5024746694976922
+    },
+    {
+      "epoch": 12,
+      "validationMacroF1": 0.5160159123080897
+    },
+    {
+      "epoch": 13,
+      "validationMacroF1": 0.5122891896807626
+    },
+    {
+      "epoch": 14,
+      "validationMacroF1": 0.5198737617763597
+    },
+    {
+      "epoch": 15,
+      "validationMacroF1": 0.5133824016574347
+    },
+    {
+      "epoch": 16,
+      "validationMacroF1": 0.5153481036267786
+    },
+    {
+      "epoch": 17,
+      "validationMacroF1": 0.5077862870673007
+    },
+    {
+      "epoch": 18,
+      "validationMacroF1": 0.5232398969158218
+    },
+    {
+      "epoch": 19,
+      "validationMacroF1": 0.5194492337874784
+    },
+    {
+      "epoch": 20,
+      "validationMacroF1": 0.5081661850982162
+    },
+    {
+      "epoch": 21,
+      "validationMacroF1": 0.5092095791396533
+    },
+    {
+      "epoch": 22,
+      "validationMacroF1": 0.5088740803853045
+    },
+    {
+      "epoch": 23,
+      "validationMacroF1": 0.5081901068941949
+    },
+    {
+      "epoch": 24,
+      "validationMacroF1": 0.5144067743650476
+    },
+    {
+      "epoch": 25,
+      "validationMacroF1": 0.5045387088008909
+    },
+    {
+      "epoch": 26,
+      "validationMacroF1": 0.5110382771970581
+    },
+    {
+      "epoch": 27,
+      "validationMacroF1": 0.5132038797220497
+    },
+    {
+      "epoch": 28,
+      "validationMacroF1": 0.5080091234315318
+    }
+  ],
+  "splitCounts": {
+    "train": {
+      "earthquake": 8238,
+      "other_disaster": 1368,
+      "not_disaster": 22016,
+      "hurricane": 4023,
+      "fire": 1678,
+      "landslide": 1015,
+      "flood": 3213
+    },
+    "val": {
+      "not_disaster": 3121,
+      "earthquake": 983,
+      "other_disaster": 336,
+      "fire": 259,
+      "hurricane": 641,
+      "landslide": 165,
+      "flood": 584
+    },
+    "test": {
+      "earthquake": 1758,
+      "not_disaster": 8835,
+      "fire": 685,
+      "other_disaster": 1147,
+      "flood": 1303,
+      "hurricane": 1498,
+      "landslide": 328
+    }
+  },
+  "preprocessing": "EXIF transpose, RGB, max-side 512 storage; ImageNet resize256/center224/normalization",
+  "elapsedSeconds": 533.0
+}

@@ -81,9 +81,10 @@ export function MLEvaluation() {
       {!result.evaluation ? <p className="rounded-lg bg-amber-900/20 p-3 text-amber-200">{result.model.status === 'ready' ? 'Held-out evaluation is required for this model version.' : result.model.status === 'setup_required' ? 'Download the pretrained models and restart the ML service.' : 'Training and held-out evaluation are required.'} No accuracy values are available.</p> : <>
         <p>{result.evaluation.algorithm} · {result.evaluation.modelVersion}</p>
         <p>{result.evaluation.sampleCount} test samples · Evaluated {new Date(result.evaluation.evaluatedAt).toLocaleString()}</p>
-        <p>Latency: mean {result.evaluation.latencyMs.mean.toFixed(1)} ms · p95 {result.evaluation.latencyMs.p95.toFixed(1)} ms</p>
-        <p>{result.evaluation.latencyMs.scope}</p>
-        <p>Abstentions: {result.evaluation.abstentionCount} (included as errors)</p>
+        {result.evaluation.latencyMs && <><p>Latency: mean {result.evaluation.latencyMs.mean.toFixed(1)} ms · p95 {result.evaluation.latencyMs.p95.toFixed(1)} ms</p>
+        <p>{result.evaluation.latencyMs.scope}</p></>}
+        <p>Low-confidence cases: {result.evaluation.abstentionCount}. {result.evaluation.abstentionPolicy || 'Abstentions are included as errors.'}</p>
+        {result.evaluation.coverage != null && <p>Above-threshold coverage: {percent(result.evaluation.coverage)} · Accepted prediction accuracy: {result.evaluation.acceptedAccuracy != null ? percent(result.evaluation.acceptedAccuracy) : 'No accepted predictions'}</p>}
         {Object.entries(result.evaluation.metrics).map(([task, metrics]) => <section key={task} className="space-y-3 border-t border-slate-600 pt-3">
           <h4 className="font-semibold capitalize">{task} classification</h4>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{(['accuracy', 'precision', 'recall', 'f1'] as const).map(key => <div key={key}>

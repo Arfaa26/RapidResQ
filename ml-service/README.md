@@ -1,4 +1,10 @@
-# RapidResQ pretrained ML setup
+# RapidResQ ML service
+
+MEDIC is the primary disaster-photo training dataset. Full source, license, label mapping, preprocessing, training commands, model architecture, evaluation and inference details are in [MEDIC integration](../docs/MEDIC_INTEGRATION.md). [Video analysis](../docs/VIDEO_ML.md) documents sampled scenes, YOLOX and the pending supervised temporal dataset work.
+
+To install the verified release model on a new checkout, from this directory run `python -m medic.install` and `python -m detector.download`. These commands install model weights only. To reproduce MEDIC training, follow the separate dataset download/preparation/training instructions. Never copy `datasets/medic/raw` or `datasets/medic/processed` into a deployment.
+
+## Existing general pretrained ML setup
 
 The default service uses genuine pretrained SigLIP 2 (photos), DeBERTa (English text category/urgency), and multilingual MiniLM (duplicate text similarity). Local development runs them in FastAPI. The public deployment sends report content from Vercel to your Hugging Face Space for inference; it does not upload reports to model repositories or use them for training. No training on RapidResQ incident data or domain accuracy is claimed; all pretrained suggestions require authority review.
 

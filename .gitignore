@@ -35,3 +35,15 @@ ml-service/models/**/evaluation.json
 ml-service/datasets/raw/
 ml-service/models/pretrained/
 ml-service/models/evaluation-pretrained/
+
+ml-service/models/detector/
+ml-service/models/video/
+ml-service/datasets/features/
+
+ml-service/datasets/medic/raw/
+ml-service/datasets/medic/processed/
+ml-service/datasets/medic/*.npy
+ml-service/datasets/medic/manifest.csv
+ml-service/datasets/medic/download.json
+ml-service/datasets/medic/preprocessing.json
+ml-service/models/disaster_classifier/

@@ -5,20 +5,46 @@ export function MLPredictionDetails({ analysis, compact = false }: { analysis: A
   const pretrained = isPretrained(analysis);
   return <section aria-label="ML prediction details" className="space-y-3 text-sm">
     <div className="flex flex-wrap gap-2 font-semibold">
-      <span>{analysis.source === 'ml' ? pretrained ? 'Pretrained ML suggestion' : 'ML recommendation' : analysis.source === 'demo' ? 'Demo scenario' : 'Manual review'}</span>
+      <span>{analysis.source === 'ml' ? analysis.disaster?.status === 'ready' ? 'ML-assisted triage' : pretrained ? 'Pretrained ML suggestion' : 'ML recommendation' : analysis.source === 'demo' ? 'Demo scenario' : 'Manual review'}</span>
       <span>• {analysis.detectedCategory}</span>
-      <span>• {analysis.priority}</span>
+      <span>• {analysis.priority} ({({ CRITICAL: 'P1', HIGH: 'P2', MEDIUM: 'P3', LOW: 'P4' })[analysis.priority]})</span>
     </div>
     <p>{formatConfidence(analysis)}</p>
-    {pretrained && <p>These models have not been trained or validated on RapidResQ incident data. Match scores are not probabilities of danger.</p>}
+    {pretrained && <p>General scene and text models use pretrained matching. Their match scores are not probabilities of danger.</p>}
     {analysis.needsReview && <p className="rounded-lg border border-amber-400/40 bg-amber-400/10 p-2">Authority review required. {analysis.status === 'training_required' ? 'Model training is required.' : ''}</p>}
     <p>Department: {analysis.department.replaceAll('_', ' ')}</p>
     <p className="leading-relaxed">{analysis.reasoning}</p>
+    {analysis.disaster && <div className="rounded-xl border border-current/20 p-3">
+      <h4 className="font-bold">Disaster analysis · MEDIC</h4>
+      {analysis.disaster.status === 'ready' ? <>
+        <p>{analysis.disaster.incidentType || 'Low confidence — Manual verification required.'}</p>
+        {analysis.disaster.confidence != null && <p>Model confidence: {(analysis.disaster.confidence * 100).toFixed(1)}%</p>}
+        <p>{analysis.disaster.message}</p>
+      </> : <p>MEDIC-trained model is not available. Other analysis, when available, is shown separately.</p>}
+    </div>}
+    {analysis.video && <div className="rounded-xl border border-current/20 p-3">
+      <h4 className="font-bold">Video analysis</h4>
+      <p>{analysis.video.analyzedFrameCount} frames analyzed{analysis.video.durationSeconds ? ` from a ${analysis.video.durationSeconds.toFixed(1)} second clip` : ''}.</p>
+      <p>{analysis.video.explanation}</p>
+      {analysis.video.disagreement && <p>Frames suggest different scenes. Manual verification required.</p>}
+      <ol className="mt-2 space-y-1">{analysis.video.frames.map((frame, i) => <li key={i}>
+        {frame.timestampSeconds.toFixed(1)}s · {frame.label || frame.status}{frame.uncertain ? ' · uncertain' : ''}
+      </li>)}</ol>
+      {analysis.video.eventModel?.status === 'ready' && <p>Experimental event model: {analysis.video.eventModel.label} · authority review required.</p>}
+    </div>}
+    {analysis.objects && <div>
+      <h4 className="font-bold">Detected objects · YOLOX</h4>
+      <p>{analysis.objects.explanation}</p>
+      {analysis.objects.status !== 'ready' ? <p>Object detection is unavailable.</p> : analysis.objects.frames.map((frame, i) => <p key={i}>
+        {frame.timestampSeconds != null ? `${frame.timestampSeconds.toFixed(1)}s: ` : ''}
+        {frame.detections.length ? Object.entries(frame.detections.reduce<Record<string, number>>((counts, d) => ({ ...counts, [d.label]: (counts[d.label] || 0) + 1 }), {})).map(([label, count]) => `${count} ${label}`).join(', ') : 'No supported objects detected above the score threshold.'}
+      </p>)}
+    </div>}
     {analysis.image && <div>
-      <h4 className="font-bold">Image: {analysis.image.status === 'unsupported_media' ? 'video retained as evidence' : analysis.image.status === 'not_provided' ? 'no photo attached' : analysis.image.status.replaceAll('_', ' ')}</h4>
-      {analysis.image.status === 'unsupported_media' && <p>Video frames are not analyzed. Text analysis can still run when a description is provided.</p>}
-      {analysis.image.uncertain && <p>Image category is uncertain. Review the photo and description together.</p>}
-      {analysis.image.top3?.map(p => <div key={p.label} className="mt-1 flex items-center gap-3">
+      <h4 className="font-bold">{analysis.video ? 'Video scenes' : 'Image'}: {analysis.image.status === 'unsupported_media' ? 'unsupported file format' : analysis.image.status === 'not_provided' ? 'no photo attached' : analysis.image.status.replaceAll('_', ' ')}</h4>
+      {analysis.image.status === 'unsupported_media' && <p>Use a photo or an MP4, MOV or WebM clip. Text analysis can still run.</p>}
+      {analysis.image.uncertain && <p>Visual category is uncertain. Review the media and description together.</p>}
+      {analysis.disaster?.status !== 'ready' && analysis.image.top3?.map(p => <div key={p.label} className="mt-1 flex items-center gap-3">
         <span className="w-24 shrink-0">{p.label}</span>
         <progress aria-label={`${p.label} ${pretrained ? 'match score' : 'probability'}`} value={p.probability} max={1} className="h-2 min-w-0 flex-1 accent-purple-500" />
         <span>{(p.probability * 100).toFixed(1)}%</span>
@@ -38,6 +64,8 @@ export function MLPredictionDetails({ analysis, compact = false }: { analysis: A
     {!compact && <details className="rounded-lg border border-current/20 p-3">
       <summary className="cursor-pointer font-semibold">Model versions and explanation</summary>
       <div className="mt-3 space-y-2 break-words">
+        <p>MEDIC version: {analysis.disaster?.modelVersion || 'Unavailable'}</p>
+        <p>Object detector: {analysis.objects?.modelVersion || 'Unavailable'}</p>
         <p>Image version: {analysis.image?.modelVersion || 'Unavailable'}</p>
         <p>Text version: {analysis.text?.modelVersion || 'Unavailable'}</p>
         {analysis.image?.explanation && <p>{analysis.image.explanation}</p>}

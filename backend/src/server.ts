@@ -264,6 +264,7 @@ app.post('/api/incidents', upload.single('media'), async (req: Request, res: Res
     // If SOS triggered explicitly, ensure priority is CRITICAL
     if (emergencySos) {
       aiAnalysis.priority = 'CRITICAL';
+      aiAnalysis.priorityCode = 'P1';
       aiAnalysis.reasoning += ' Explicit citizen SOS overrides priority to CRITICAL (operational policy).';
       if (aiAnalysis.fusion) aiAnalysis.fusion.steps.push('Explicit citizen SOS: CRITICAL override.');
     }

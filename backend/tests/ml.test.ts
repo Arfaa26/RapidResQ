@@ -73,3 +73,24 @@ test('legacy scores cannot masquerade as trained-model probabilities', () => {
   assert.equal(normalized.aiAnalysis.confidence, null);
   assert.equal(normalized.aiAnalysis.source, 'legacy');
 });
+
+
+test('MEDIC low confidence must not be presented as an accepted disaster type', () => {
+  const base = manualReview({ description: '' }, 'Fixture only');
+  const disaster = { status: 'ready', dataset: 'MEDIC' as const, model: 'RapidResQ Disaster Classifier',
+    modelVersion: 'fixture', incidentType: null, confidence: .4, threshold: .7,
+    lowConfidence: true, needsReview: true,
+    probabilities: { earthquake: .1, flood: .1, hurricane: .1, fire: .4, landslide: .1, not_disaster: .1, other_disaster: .1 } };
+  assert.equal(validAnalysis({ ...base, disaster }), true);
+  assert.equal(validAnalysis({ ...base, disaster: { ...disaster, incidentType: 'Fire' } }), false);
+  assert.equal(validAnalysis({ ...base, disaster: { ...disaster, confidence: 9 } }), false);
+});
+
+test('video details reject invented audio analysis and invalid timestamps', () => {
+  const base = manualReview({ description: '' }, 'Fixture only');
+  const video = { status: 'ready', method: 'sampled_frames', sampledFrameCount: 1, analyzedFrameCount: 1,
+    audioAnalyzed: false, explanation: 'Fixture', frames: [{ timestampSeconds: 1, status: 'ready', label: 'FIRE', confidence: .8, uncertain: false }] };
+  assert.equal(validAnalysis({ ...base, video }), true);
+  assert.equal(validAnalysis({ ...base, video: { ...video, audioAnalyzed: true } }), false);
+  assert.equal(validAnalysis({ ...base, video: { ...video, frames: [{ ...video.frames[0], timestampSeconds: NaN }] } }), false);
+});

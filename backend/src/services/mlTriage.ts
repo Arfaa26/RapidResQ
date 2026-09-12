@@ -53,6 +53,30 @@ export function validAnalysis(value: AIAnalysisResult): boolean {
   }
   if (value.source === 'ml' && value.image?.status !== 'ready' && value.text?.status !== 'ready') return false;
   if (value.image?.status === 'ready' && (value.image.top3?.length !== 3 || !value.image.top3.every(p => probability(p.probability) && categories.includes(p.label as IncidentCategory)))) return false;
+  if (value.disaster) {
+    const d = value.disaster;
+    if (d.dataset !== 'MEDIC' || typeof d.status !== 'string' || typeof d.model !== 'string'
+      || !(d.incidentType === null || typeof d.incidentType === 'string') || d.needsReview !== true) return false;
+    if (d.status === 'ready') {
+      if (!d.modelVersion || !probability(d.confidence) || !probability(d.threshold) || typeof d.lowConfidence !== 'boolean'
+        || !d.probabilities || Object.keys(d.probabilities).length !== 7) return false;
+      const scores = Object.values(d.probabilities);
+      if (!scores.every(probability) || Math.abs(scores.reduce((a, b) => a + b, 0) - 1) > .001) return false;
+      if (d.lowConfidence && d.incidentType !== null) return false;
+    }
+  }
+  if (value.video) {
+    const v = value.video;
+    if (!Array.isArray(v.frames) || v.frames.length > 6 || v.audioAnalyzed !== false
+      || typeof v.explanation !== 'string' || !Number.isInteger(v.analyzedFrameCount)
+      || v.analyzedFrameCount < 0 || v.analyzedFrameCount > v.frames.length
+      || !v.frames.every(f => Number.isFinite(f.timestampSeconds) && f.timestampSeconds >= 0 && f.timestampSeconds <= 30.1
+        && (f.confidence == null || probability(f.confidence)))) return false;
+  }
+  if (value.objects && (!Array.isArray(value.objects.frames) || value.objects.frames.length > 6
+    || typeof value.objects.explanation !== 'string' || !value.objects.frames.every(f => Array.isArray(f.detections)
+      && f.detections.length <= 30 && f.detections.every(d => typeof d.label === 'string' && probability(d.confidence)
+        && Array.isArray(d.box) && d.box.length === 4 && d.box.every(probability))))) return false;
   return true;
 }
 

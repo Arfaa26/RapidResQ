@@ -38,7 +38,8 @@ def test_corrupt_image_video_and_empty_text_are_explicit(client):
     assert result['text']['status'] == 'not_provided'
     assert result['confidence'] is None
     video = client.post('/analyze', files={'media': ('video.mp4', b'video fixture', 'video/mp4')}).json()
-    assert video['image']['status'] == 'unsupported_media'
+    assert video['image']['status'] == 'invalid_video'
+    assert video['video']['analyzedFrameCount'] == 0
 
 
 def test_image_hash_and_untrained_top3(client):

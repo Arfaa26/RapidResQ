@@ -1,0 +1,153 @@
+{
+  "modelVersion": "medic-mobilenetv3-2da51433fcc6",
+  "dataset": "MEDIC",
+  "evaluatedAt": "2026-09-12T19:02:52.920779+00:00",
+  "split": "test",
+  "sampleCount": 15554,
+  "manifestSha256": "5ab870d7ddae1835c729b42a95dd6376d34d414002060fbe47091131d336e5e6",
+  "accuracy": 0.6432428957181432,
+  "macroF1": 0.5490360279790377,
+  "perClass": {
+    "earthquake": {
+      "precision": 0.632413388138579,
+      "recall": 0.6126279863481229,
+      "f1-score": 0.6223634787633632,
+      "support": 1758.0
+    },
+    "flood": {
+      "precision": 0.5711805555555556,
+      "recall": 0.7574827321565618,
+      "f1-score": 0.651270207852194,
+      "support": 1303.0
+    },
+    "hurricane": {
+      "precision": 0.3921960980490245,
+      "recall": 0.5233644859813084,
+      "f1-score": 0.4483843294252216,
+      "support": 1498.0
+    },
+    "fire": {
+      "precision": 0.4714038128249567,
+      "recall": 0.7941605839416058,
+      "f1-score": 0.5916258836324089,
+      "support": 685.0
+    },
+    "landslide": {
+      "precision": 0.32421875,
+      "recall": 0.7591463414634146,
+      "f1-score": 0.4543795620437956,
+      "support": 328.0
+    },
+    "not_disaster": {
+      "precision": 0.9356623458741701,
+      "recall": 0.6699490662139219,
+      "f1-score": 0.7808192071763076,
+      "support": 8835.0
+    },
+    "other_disaster": {
+      "precision": 0.23720682302771856,
+      "recall": 0.38796861377506536,
+      "f1-score": 0.2944095269599735,
+      "support": 1147.0
+    },
+    "accuracy": 0.6432428957181432,
+    "macro avg": {
+      "precision": 0.5091831104957149,
+      "recall": 0.6435285442685715,
+      "f1-score": 0.5490360279790377,
+      "support": 15554.0
+    },
+    "weighted avg": {
+      "precision": 0.7336665274984011,
+      "recall": 0.6432428957181432,
+      "f1-score": 0.6689549602314977,
+      "support": 15554.0
+    }
+  },
+  "confusionMatrix": [
+    [
+      1077,
+      45,
+      141,
+      66,
+      93,
+      91,
+      245
+    ],
+    [
+      18,
+      987,
+      113,
+      25,
+      38,
+      67,
+      55
+    ],
+    [
+      115,
+      138,
+      784,
+      65,
+      116,
+      108,
+      172
+    ],
+    [
+      26,
+      7,
+      31,
+      544,
+      13,
+      22,
+      42
+    ],
+    [
+      20,
+      6,
+      15,
+      13,
+      249,
+      4,
+      21
+    ],
+    [
+      279,
+      456,
+      781,
+      322,
+      182,
+      5919,
+      896
+    ],
+    [
+      168,
+      89,
+      134,
+      119,
+      77,
+      115,
+      445
+    ]
+  ],
+  "labels": [
+    "earthquake",
+    "flood",
+    "hurricane",
+    "fire",
+    "landslide",
+    "not_disaster",
+    "other_disaster"
+  ],
+  "threshold": 0.7,
+  "coverage": 0.3433200462903433,
+  "acceptedAccuracy": 0.8882022471910113,
+  "lowConfidenceCount": 10214,
+  "validationMacroF1": 0.5232398969158218,
+  "limitations": "Cleaned official image split; not unseen-event, citizen-upload or emergency severity validation.",
+  "latencyMs": {
+    "mean": 18.215642809601768,
+    "p50": 15.740199945867062,
+    "p95": 27.78898994438349,
+    "scope": "CPU model inference and preprocessing on seven held-out images; includes first inference, excludes network and model loading."
+  }
+}

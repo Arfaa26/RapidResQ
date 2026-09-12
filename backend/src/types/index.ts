@@ -31,6 +31,10 @@ export interface LocationData {
 }
 
 export interface AIAnalysisResult {
+  disaster?: DisasterPrediction;
+  video?: VideoPrediction;
+  objects?: ObjectEvidence;
+  priorityCode?: string;
   confidence: number | null;
   source?: 'ml' | 'manual_review' | 'demo' | 'legacy';
   status?: string;
@@ -159,4 +163,22 @@ export interface EvaluationResult {
     evaluatedAt: string; manifestSha256: string; metrics: Record<string, EvaluationMetrics>;
     latencyMs: { mean: number; p50: number; p95: number; scope: string }; abstentionCount: number;
   };
+}
+
+export interface DisasterPrediction {
+  status: string; dataset: 'MEDIC'; model: string; modelVersion?: string;
+  incidentType: string | null; candidateType?: string; predictedLabel?: string;
+  confidence: number | null; threshold?: number; lowConfidence?: boolean;
+  probabilities?: Record<string, number>; needsReview: boolean; message?: string;
+}
+export interface VideoPrediction {
+  status: string; method: string; durationSeconds?: number;
+  sampledFrameCount: number; analyzedFrameCount: number; audioAnalyzed: boolean;
+  disagreement?: boolean; uncertain?: boolean; explanation: string;
+  frames: Array<{ timestampSeconds: number; status: string; label?: string; confidence?: number; uncertain: boolean }>;
+  eventModel?: { status: string; label?: string; anomalyScore?: number; explanation?: string };
+}
+export interface ObjectEvidence {
+  status: string; modelVersion: string; explanation: string;
+  frames: Array<{ timestampSeconds?: number; detections: Array<{ label: string; confidence: number; box: number[] }> }>;
 }

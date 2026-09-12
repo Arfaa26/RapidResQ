@@ -15,6 +15,7 @@ os.environ['ML_MODEL_MODE'] = 'pretrained'
 
 # An explicit startup setup step; inference itself uses local files only.
 subprocess.run([sys.executable, '-m', 'pretrained.download'], check=True)
+subprocess.run([sys.executable, '-m', 'detector.download'], check=True)
 
 import app as service
 from analytics import duplicates, hotspots
@@ -40,7 +41,12 @@ class AnalysisInput(BaseModel):
 
 
 @spaces.GPU(duration=15)
-def gpu_analysis(payload):
+def gpu_analysis(request, context, prepared):
+    return service.analyze_bytes(None, request.mimeType, request.title, request.description,
+                                 request.categoryHint, request.explain, context, prepared=prepared)
+
+
+def analysis_request(payload):
     request = AnalysisInput.model_validate(payload)
     context = json.loads(request.context)
     if not isinstance(context, dict):
@@ -48,8 +54,19 @@ def gpu_analysis(payload):
     raw = base64.b64decode(request.media, validate=True) if request.media else None
     if raw and len(raw) > service.MAX_BYTES:
         raise ValueError('Maximum upload is 4 MB')
-    return service.analyze_bytes(raw, request.mimeType, request.title, request.description,
-                                 request.categoryHint, request.explain, context)
+    prepared = service.prepare_media(raw, request.mimeType)
+    if prepared.get('disaster', {}).get('status') == 'ready' and not (request.title + request.description).strip():
+        return service.analyze_bytes(None, request.mimeType, request.title, request.description,
+            request.categoryHint, request.explain, context, prepared=prepared, text_override={'status': 'not_provided'})
+    try:
+        return gpu_analysis(request, context, prepared)
+    except Exception:
+        # Keep real CPU MEDIC predictions when free GPU text inference is unavailable.
+        if prepared.get('disaster', {}).get('status') != 'ready':
+            raise
+        return service.analyze_bytes(None, request.mimeType, request.title, request.description,
+            request.categoryHint, request.explain, context, prepared=prepared,
+            text_override={'status': 'unavailable', 'explanation': 'Text analysis is temporarily unavailable. The MEDIC photo prediction is retained; urgency requires manual review.'})
 
 
 @spaces.GPU(duration=15)
@@ -69,8 +86,17 @@ def dispatch(payload, service_key):
         return {**service.health(), 'hosting': 'gradio_zerogpu_free'}
     if endpoint == '/evaluation':
         return service.evaluation()
+    if endpoint == '/predict-image':
+        request = AnalysisInput.model_validate(body)
+        raw = base64.b64decode(request.media, validate=True) if request.media else b''
+        if not raw or len(raw) > service.MAX_BYTES or not request.mimeType.startswith('image/'):
+            raise gr.Error('Upload an image smaller than 4 MB')
+        prepared = service.prepare_media(raw, request.mimeType)
+        if prepared['kind'] != 'image':
+            raise gr.Error(prepared.get('explanation', 'Invalid image'))
+        return prepared['disaster']
     if endpoint == '/analyze':
-        return gpu_analysis(body)
+        return analysis_request(body)
     if endpoint == '/duplicates':
         return gpu_duplicates(body)
     if endpoint == '/hotspots':
@@ -80,7 +106,7 @@ def dispatch(payload, service_key):
 
 with gr.Blocks(analytics_enabled=False) as demo:
     gr.Markdown('# RapidResQ ML Service\n'
-                'Pretrained image/text triage and duplicate suggestions for RapidResQ. '
+                'Pretrained photo/video-frame/text triage and YOLOX object evidence and duplicate suggestions for RapidResQ. '
                 'All suggestions require authority review. No project accuracy is claimed.\n\n'
                 'This free demonstration uses shared GPU capacity, with daily quotas and possible queues. '
                 'The citizen interface is hosted on Vercel. Service access requires its private key.')

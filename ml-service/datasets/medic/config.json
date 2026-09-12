@@ -1,0 +1,13 @@
+{
+  "dataset": "MEDIC",
+  "repository": "QCRI/MEDIC",
+  "revision": "bc2e6f3c99f511ce89055cad5a661c69e43ec6de",
+  "source": "https://crisisnlp.qcri.org/medic/",
+  "terms": "https://crisisnlp.qcri.org/medic/terms-of-use.html",
+  "license": "CC-BY-NC-SA-4.0",
+  "task": "disaster_types",
+  "labels": ["earthquake", "flood", "hurricane", "fire", "landslide", "not_disaster", "other_disaster"],
+  "splits": {"train": "train", "dev": "val", "test": "test"},
+  "seed": 42,
+  "confidenceThreshold": 0.70
+}

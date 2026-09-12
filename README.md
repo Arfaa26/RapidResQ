@@ -4,11 +4,17 @@ Emergency and civic incident reporting with an integrated, trainable ML triage s
 
 This is the existing **React/Vite + Express** web application from the `web-app` branch. The repository's `main` branch contains a separate Flutter prototype. The citizen interface, authority command center, Leaflet maps, GPS capture, media upload, incident tracking, dispatch status and timelines are preserved.
 
+## MEDIC disaster image classifier and video analysis
+
+The existing photo flow supports a MEDIC-trained MobileNetV3-Small disaster classifier, with actual model confidence, configurable abstention, exact disaster subtype storage, and matching test metrics in Developer evaluation. See [MEDIC setup, labels, training and inference](docs/MEDIC_INTEGRATION.md). Dataset access and training results are recorded with the released model artifacts; raw MEDIC data is excluded from Git and deployments.
+
+Short videos use six timestamped SigLIP scene checks and YOLOX person/vehicle evidence. See [video limits and supervised training status](docs/VIDEO_ML.md). Frame sampling is not a trained temporal action model. The UCF event-model training pipeline requires accessible labeled footage; it is not claimed trained.
+
 ## ML upgrade status
 
 The application now integrates a separate FastAPI service with:
 
-- SigLIP 2 pretrained photo suggestions and top-three match scores; optional MobileNetV3 training/Grad-CAM retained.
+- MEDIC disaster classification as the primary photo model when its verified artifact is installed; SigLIP 2 pretrained general scene/video suggestions and top-three match scores; optional MobileNetV3 training/Grad-CAM retained.
 - DeBERTa pretrained English text category/urgency suggestions; optional TF-IDF + Logistic Regression training retained.
 - Multilingual MiniLM semantic duplicate matching with explicit lexical fallback and existing geographic/time gates.
 - A documented image/text/context priority policy with explicit SOS override.
@@ -16,7 +22,7 @@ The application now integrates a separate FastAPI service with:
 - DBSCAN hotspot maps and time-window incident trends.
 - An evaluation dashboard backed only by held-out test artifacts matching the loaded model version.
 
-**The default runtime uses pretrained models, with mandatory authority review and uncalibrated score labels.** The official weights are downloaded separately using the setup command. No RapidResQ-specific training or accuracy is claimed. Missing snapshots show setup required. The supplied historical-disaster CSV is unsuitable for this image/text triage task and was not used for training.
+**MEDIC photo inference uses its separately trained classifier. General scene, text and duplicate models retain their pretrained behavior, with mandatory authority review and explicit score labels.** The official weights are downloaded separately using the setup command. MEDIC test results apply to its cleaned official image split; no citizen-upload or urgency accuracy is claimed. Missing snapshots show setup required. The supplied historical-disaster CSV is unsuitable for this image/text triage task and was not used for training.
 
 ## Architecture
 

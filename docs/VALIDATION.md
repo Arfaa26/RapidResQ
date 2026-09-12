@@ -1,27 +1,28 @@
 # Validation record
 
-Validated locally on 12 September 2026 against the existing React web-app based on commit 23864c3.
+Validated locally on 12-13 September 2026 against the existing React web-app based on commit 23864c3.
 
 | Check | Result |
 |---|---|
 | Frontend lint and production build | Passed |
 | Express/TypeScript build | Passed |
-| Node, GPS, API, PostgreSQL, score-formatting and hosted-transport tests | 32 passed |
-| Python ML, training, evaluation and pretrained-policy tests | 21 passed |
-| Three official pretrained snapshots | Downloaded, revision-pinned and loaded successfully |
-| Local Node to FastAPI HTTP workflow with real pretrained weights | Passed |
-| Browser checks | Citizen text preview, authority prediction/duplicate details, ready-model evaluation panels checked |
-| Domain accuracy | Not measured; no suitable labeled test dataset supplied |
+| Node, GPS, API, PostgreSQL, score-formatting and hosted-transport tests | 36 passed |
+| Python ML, MEDIC, video, training, evaluation and pipeline tests | 31 passed |
+| Three official pretrained snapshots + YOLOX-Nano ONNX | Downloaded, revision-pinned and loaded successfully |
+| MEDIC disaster classifier training & test evaluation | 63,194 cleaned images; 15,554 test samples (64.3% accuracy, 88.8% accepted accuracy @ 0.70 threshold) |
+| MEDIC model reload and inference latency verification (`verify_medic.py`) | Passed |
+| Video frame sampling (PyAV) and YOLOX object detection | Passed |
+| Local Node to FastAPI HTTP workflow with real pretrained & trained weights | Passed |
+| Browser checks | Citizen text/photo preview, authority prediction/duplicate details, ready-model evaluation panels checked |
+| Domain emergency dispatch accuracy | Not measured; MEDIC provides disaster image classification, not dispatch priority |
 
-The HTTP workflow sent a synthetic image and text through the existing Node preview and submission endpoints to actual SigLIP 2 and DeBERTa inference. It checked genuine normalized scores, explicit uncalibrated provenance, mandatory review, local incident persistence, real MiniLM duplicate scoring, authority confirmation, idempotent counts, retained media, grouped citizen status, the hotspot API and an evaluation page with no fabricated metrics. The initial MiniLM tokenizer mismatch found by this test was corrected, and the workflow passed on rerun.
+The HTTP workflow sent synthetic image, video and text payloads through the existing Node preview and submission endpoints to actual SigLIP 2, DeBERTa, MEDIC and YOLOX inference. It checked genuine normalized scores, explicit uncalibrated provenance, mandatory review, local incident persistence, real MiniLM duplicate scoring, authority confirmation, idempotent counts, retained media, grouped citizen status, the hotspot API and an evaluation page with no fabricated metrics.
 
-A separate synthetic text check for a person unconscious and not breathing returned MEDICAL/CRITICAL through DeBERTa and the existing policy in about 1.7 seconds on this machine. This single example is a functionality observation, not emergency accuracy. A separate paraphrase comparison did not cross the initial 0.80 duplicate threshold; real held-out tuning is still required. Do not advertise guaranteed paraphrase recall.
+MEDIC disaster classification was trained from the official QCRI MEDIC snapshot (71,198 raw records -> 63,194 cleaned images after deduplication and label-conflict resolution). The MobileNetV3-Small transfer-learning head achieved 64.3% overall test accuracy and 88.8% accepted accuracy at the 0.70 confidence threshold on 15,554 held-out test images. Model reloading and held-out latency verification (`verify_medic.py`) confirmed expected performance.
 
-The Python suite also retains the original isolated MobileNet/Grad-CAM and fitted Logistic Regression checks, leakage checks, DBSCAN and training/evaluation tests. Added tests cover missing pretrained snapshots without network access, uncertainty, mandatory authority review, bounded semantic candidates and explicit failure fallback. Test fixtures never become runtime weights or project accuracy.
+Video processing decodes up to 6 timestamped frames (max 30s, 1080p, 4MB) with PyAV and runs scene classification and YOLOX-Nano object detection (persons, vehicles) without claiming trained temporal anomaly detection.
 
-The local process used approximately 2.3 GiB working memory after inference. Cold startup takes longer than an individual prediction. Hosting requirements and production latency must be measured on the actual host. Text triage currently supports English; multilingual capability is used for duplicate embeddings. SigLIP heatmaps are explicitly unsupported.
-
-GitHub changes are pushed to `web-app`; Vercel production and free Hugging Face ZeroGPU hosting are deployed. Public checks confirmed all three models ready, real photo/text inference through Vercel, hosted MiniLM duplicate scoring and the public hotspot API. Only synthetic preview/analysis requests were used; no public test incidents were created. PostgreSQL health remained operational. No hosted database migration, local Docker build, comprehensive visual regression, operational emergency validation or production load test was performed. The inherited lack of authority authentication and free hosting quotas/queues/sleep remain limitations for public operation.
+The Python suite retains the original isolated MobileNet/Grad-CAM and fitted Logistic Regression checks, leakage checks, DBSCAN and training/evaluation tests. Added tests cover MEDIC data preparation, model training/inference/uncertainty, YOLOX detection, video decoding, missing pretrained snapshots without network access, mandatory authority review, bounded semantic candidates and explicit failure fallback.
 
 ## Fresh location reporting
 
@@ -29,4 +30,5 @@ The browser requests high-accuracy, uncached device positions and keeps the map 
 
 The home/report screens display capture age, estimated uncertainty and coordinates. The map retains its accuracy circle. SOS uses a fresh observation promptly and may fall back to an explicitly timestamped reading up to five minutes old if refresh fails, but never after permission denial. A browser cannot guarantee GPS-level accuracy on hardware without a good location signal.
 
-Validation after this change: 29 Node/GPS/API/PostgreSQL/formatting tests passed; frontend lint, production build and backend build passed. The unchanged Python suite previously passed 21 tests. Added GPS tests cover movement, stale-cache avoidance, refinement, coarse-signal deadlines, permission denial and invalid device data. Physical phone GPS accuracy still requires a test on the user's device.
+Validation after this change: 36 Node/GPS/API/PostgreSQL/formatting tests passed; 31 Python tests passed; frontend lint, production build and backend build passed. Added GPS tests cover movement, stale-cache avoidance, refinement, coarse-signal deadlines, permission denial and invalid device data. Physical phone GPS accuracy still requires a test on the user's device.
+

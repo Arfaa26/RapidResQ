@@ -244,17 +244,17 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*,video/*"
+            accept="image/*,video/mp4,video/webm,video/quicktime"
             onChange={handleMediaChange}
             className="hidden"
           />
         </div>
 
-        {aiPreview?.image?.status === 'ready' && aiPreview.image.inferenceMode !== 'pretrained_zero_shot' && <label className="flex items-center gap-2 px-2 text-sm">
+        {aiPreview?.image?.status === 'ready' && aiPreview.image.inferenceMode !== 'pretrained_zero_shot' && !aiPreview.image.modelVersion?.startsWith('medic-') && !aiPreview.video && <label className="flex items-center gap-2 px-2 text-sm">
           <input type="checkbox" checked={explain} onChange={e => setExplain(e.target.checked)} />
           Include image attention heatmap
         </label>}
-        {mediaFile?.type.startsWith('video/') && <p className="px-2 text-xs text-slate-600">Video is saved as evidence. Add a description for AI analysis; video frames are not analyzed.</p>}
+        {mediaFile?.type.startsWith('video/') && <p className="px-2 text-xs text-slate-600">Upload a clip up to 30 seconds, 1080p and 4 MB. AI checks up to 6 frames; audio is not analyzed. Add a description for urgency assessment.</p>}
         {aiError && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{aiError} You can still submit for authority review.</p>}
         {/* AI Triage Live Assistant Badge */}
         {(aiPreview || isAnalyzingAi) && (

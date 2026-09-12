@@ -6,7 +6,7 @@ Validated locally on 12 September 2026 against the existing React web-app based 
 |---|---|
 | Frontend lint and production build | Passed |
 | Express/TypeScript build | Passed |
-| Node, GPS, API, PostgreSQL and score-formatting tests | 24 passed |
+| Node, GPS, API, PostgreSQL, score-formatting and hosted-transport tests | 32 passed |
 | Python ML, training, evaluation and pretrained-policy tests | 21 passed |
 | Three official pretrained snapshots | Downloaded, revision-pinned and loaded successfully |
 | Local Node to FastAPI HTTP workflow with real pretrained weights | Passed |
@@ -21,7 +21,7 @@ The Python suite also retains the original isolated MobileNet/Grad-CAM and fitte
 
 The local process used approximately 2.3 GiB working memory after inference. Cold startup takes longer than an individual prediction. Hosting requirements and production latency must be measured on the actual host. Text triage currently supports English; multilingual capability is used for duplicate embeddings. SigLIP heatmaps are explicitly unsupported.
 
-No hosted Neon changes, GitHub push, Vercel deployment, public ML hosting, Docker build, comprehensive visual regression, operational emergency validation or production load test was performed. Database behavior was checked locally using PGlite. The inherited lack of authority authentication remains a limitation for public operation. The local preview uses demonstration/test records only.
+GitHub changes are pushed to `web-app`; Vercel production and free Hugging Face ZeroGPU hosting are deployed. Public checks confirmed all three models ready, real photo/text inference through Vercel, hosted MiniLM duplicate scoring and the public hotspot API. Only synthetic preview/analysis requests were used; no public test incidents were created. PostgreSQL health remained operational. No hosted database migration, local Docker build, comprehensive visual regression, operational emergency validation or production load test was performed. The inherited lack of authority authentication and free hosting quotas/queues/sleep remain limitations for public operation.
 
 ## Fresh location reporting
 

@@ -60,7 +60,7 @@ Run `python -m pytest -q` from `ml-service` in the Python environment. PostgreSQ
 
 ## Deployment
 
-Keep the existing Vercel frontend and Node API configuration. Deploy FastAPI separately with installed pretrained snapshots (or optional trained artifacts), HTTPS and a shared `ML_SERVICE_KEY`, then configure Node's `ML_SERVICE_URL`. The Dockerfile requires a service key and installs CPU PyTorch wheels. Training is never performed in the frontend or during requests.
+The existing Vercel website is connected to the free [RapidResQ ML Space](https://huggingface.co/spaces/arfaa0312/rapidresq-ml). All three models, public photo/text previews and hotspot analytics were verified. GitHub Actions publishes model source using a repository-scoped trusted publisher. See [public hosting](docs/ML_HOSTING.md) for `ML_SERVICE_TRANSPORT=gradio`, the private service key and deployment details. Free ZeroGPU hosting has quotas, queues and cold starts; manual-review fallback remains. FastAPI/Docker are retained for local or alternative hosting. Training is never performed in the frontend or during requests.
 
 The inherited authority interface has no authentication/role enforcement. Use a controlled project-demo environment until those controls and real-world ML validation are added. The app does not contact official emergency services.
 

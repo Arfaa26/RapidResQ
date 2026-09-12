@@ -77,7 +77,7 @@ Restart after switching modes. Trained mode uses trusted local `models/image/mod
 
 FastAPI reads exported process variables, not `.env.example` automatically. Keep React/Node on the existing Vercel setup. Host FastAPI separately with persistent model storage, HTTPS and a private key. Build Docker from `ml-service`; it downloads the pinned pretrained snapshots into the image. For trained mode, use `DOWNLOAD_PRETRAINED=0` and mount trusted artifacts under `MODEL_DIR`. See [public hosting setup](../docs/ML_HOSTING.md). Use one worker initially. The local process used about 2.3 GiB working memory after inference; this is not a hosting guarantee. Measure peak RAM and latency on the deployment machine. A bounded inference queue returns 503 when busy; Node preserves manual-review fallback.
 
-The inherited authority UI has no authentication/role enforcement. Use a controlled demonstration environment. The app does not contact official emergency services. The website is deployed on Vercel; the separate public Python service is pending hosting account setup.
+The public website is deployed on Vercel and connected to the free Gradio ZeroGPU Space `arfaa0312/rapidresq-ml`. Its `space_app.py` entry point uses the same model adapters and policies, with GPU allocation through `spaces.GPU`. GitHub publishes through `.github/workflows/deploy-ml.yml`; no personal Hugging Face token is stored in GitHub. See [hosting setup](../docs/ML_HOSTING.md) for the Gradio transport and private key configuration. Free quotas, queues and cold starts can trigger manual review. The inherited authority UI has no authentication/role enforcement. Use a controlled demonstration environment. The app does not contact official emergency services.
 
 ## Checks
 

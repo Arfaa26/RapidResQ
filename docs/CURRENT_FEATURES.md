@@ -2,7 +2,7 @@
 
 ## Current status
 
-The React/Node website and existing Neon PostgreSQL database are deployed on Vercel. The three pretrained models are installed and working in the local Python service. Public ML inference, semantic duplicates and DBSCAN analytics need that service hosted separately and connected through `ML_SERVICE_URL`. Until then, the public app uses explicit manual-review fallback; it does not invent predictions or accuracy. Moving ML Evaluation into Developer does not change incident inference.
+The React/Node website and existing Neon PostgreSQL database are deployed on Vercel. All three pretrained models are now hosted on the free Hugging Face Gradio ZeroGPU Space `arfaa0312/rapidresq-ml` and connected to Vercel. Public photo/text inference, hosted MiniLM duplicate scoring and the public hotspot endpoint passed synthetic checks on 12 September 2026. Free hosting has queues, daily quotas and cold starts; unavailable requests retain explicit manual review. Moving ML Evaluation into Developer does not change incident inference.
 
 ## Citizen reporting
 
@@ -54,11 +54,11 @@ The image adapter returns top-three relative candidate scores and an uncertainty
 
 ## Infrastructure
 
-React/Vite frontend -> Express/Node main API -> FastAPI model service. Existing Neon PostgreSQL stores incident JSON and uploaded evidence. GitHub's `web-app` branch is connected to Vercel production. No new incident-table migration was needed for the ML metadata.
+React/Vite frontend -> Express/Node main API -> Gradio ZeroGPU hosted model service (FastAPI locally). Existing Neon PostgreSQL stores incident JSON and uploaded evidence. GitHub's `web-app` branch deploys the website to Vercel and model source to Hugging Face through a repository-scoped trusted publisher. No new incident-table migration was needed for the ML metadata.
 
 ## Not implemented or not yet validated
 
-- Public hosting for the Python ML service is not configured.
+- Free ML hosting does not provide guaranteed uninterrupted availability; queues, quotas and sleep can delay or prevent inference.
 - No reviewed RapidResQ test dataset, fine-tuning results or project accuracy is available. The supplied historical disaster CSV was not suitable for photo/text triage training.
 - The Developer label organizes tools; it does not add login or access control. Authenticated users and authority roles are not implemented.
 - User/profile details and emergency-contact call screens contain demonstration data. Contact calling is simulated; there is no official emergency-service, SMS or automatic phone-dispatch integration.
@@ -67,4 +67,4 @@ React/Vite frontend -> Express/Node main API -> FastAPI model service. Existing 
 
 ## Verification
 
-The latest navigation move passed frontend lint, frontend/backend builds and browser verification: the authority dashboard has two operational tabs, and Developer opens the retained evaluation screen. The preceding complete validation passed 29 Node/GPS/API/PostgreSQL/formatting tests and 21 Python tests, plus local real-model HTTP workflow checks. These software checks are not domain accuracy measurements.
+Frontend lint and frontend/backend builds passed, along with 32 Node/GPS/API/PostgreSQL/transport tests and 21 Python tests. Public verification confirmed all three models ready, a photo/text preview with `source=ml`, hosted MiniLM duplicate inference and HTTP 200 from hotspot analytics. No public test incidents were created. These software checks are not domain accuracy measurements.

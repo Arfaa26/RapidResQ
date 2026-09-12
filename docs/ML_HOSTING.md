@@ -1,7 +1,9 @@
 # Public ML deployment
 
-Status: a free Space `arfaa0312/rapidresq-ml` has been created; application upload
-is deployed from GitHub; its first build is running. The Vercel production URL, transport, timeout and private key are configured, and public inference is awaiting verification. GitHub Actions publishes through a
+Status: the free Space `arfaa0312/rapidresq-ml` is running and connected to Vercel.
+All three models report ready. Public photo/text inference, hosted MiniLM duplicate
+scoring and the public hotspot endpoint passed synthetic checks on 12 September
+2026. No public incidents were created during verification. GitHub Actions publishes through a
 trusted publisher restricted to this repository, `web-app`, and `deploy-ml.yml`.
 The existing Vercel website and PostgreSQL database are already deployed.
 

@@ -44,6 +44,8 @@ See the [ML service guide](ml-service/README.md) for exact PowerShell commands, 
 
 ## Project documentation
 
+- [Current features, integrated model links and remaining limitations](docs/CURRENT_FEATURES.md). Model metrics are now under **Developer -> ML Evaluation**; the authority dashboard keeps Incidents and Hotspot Analytics.
+
 - [Architecture audit, file changes, database changes and phase-by-phase plan](docs/ML_UPGRADE.md)
 - [Datasets, training, evaluation and service operation](ml-service/README.md)
 

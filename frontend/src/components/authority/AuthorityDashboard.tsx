@@ -20,7 +20,7 @@ import { InteractiveMap } from '../common/InteractiveMap';
 import { api } from '../../services/api';
 import { soundAlerts } from '../../utils/audioAlert';
 import { MLPredictionDetails } from '../common/MLPredictionDetails';
-import { HotspotAnalytics, MLEvaluation } from './MLAnalytics';
+import { HotspotAnalytics } from './MLAnalytics';
 import { DuplicateReview } from './DuplicateReview';
 import confetti from 'canvas-confetti';
 
@@ -37,7 +37,7 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
   onRefresh,
   onUpdateIncident,
 }) => {
-  const [view, setView] = useState<'incidents' | 'hotspots' | 'evaluation'>('incidents');
+  const [view, setView] = useState<'incidents' | 'hotspots'>('incidents');
   const [showGrouped, setShowGrouped] = useState(false);
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
@@ -198,9 +198,9 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
       </header>
 
       <div className="flex flex-wrap gap-3 px-4 pt-4" aria-label="Dashboard views">
-        {(['incidents', 'hotspots', 'evaluation'] as const).map(tab => <button key={tab} onClick={() => setView(tab)} aria-pressed={view === tab}
+        {(['incidents', 'hotspots'] as const).map(tab => <button key={tab} onClick={() => setView(tab)} aria-pressed={view === tab}
           className={`rounded-xl px-4 py-2 text-sm font-bold ${view === tab ? 'bg-purple-600' : 'bg-slate-800'}`}>
-          {tab === 'evaluation' ? 'ML Evaluation' : tab === 'hotspots' ? 'Hotspot Analytics' : 'Incidents'}
+          {tab === 'hotspots' ? 'Hotspot Analytics' : 'Incidents'}
         </button>)}
       </div>
       <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 xl:grid-cols-6">
@@ -209,7 +209,6 @@ export const AuthorityDashboard: React.FC<AuthorityDashboardProps> = ({
           <div key={label} className="rounded-xl border border-slate-700 bg-slate-800 p-3 text-sm"><p>{label}</p><p className="mt-2 text-xl font-bold">{count}</p></div>)}
       </div>
       {view === 'hotspots' && <HotspotAnalytics revision={incidents.map(i => i.id + i.updatedAt).join('|')} />}
-      {view === 'evaluation' && <MLEvaluation />}
       {view === 'incidents' && <>
       {/* 2. Department Filter Navigation Bar */}
       <div className="bg-[#1E293B]/70 border-b border-slate-800 px-4 py-2.5 flex flex-col gap-3">

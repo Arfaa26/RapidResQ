@@ -18,11 +18,12 @@ import { ReportIncidentScreen } from './components/citizen/ReportIncidentScreen'
 import { IncidentTrackerScreen } from './components/citizen/IncidentTrackerScreen';
 import { CommunityAlertsScreen } from './components/citizen/CommunityAlertsScreen';
 import { AuthorityDashboard } from './components/authority/AuthorityDashboard';
+import { DeveloperSection } from './components/developer/DeveloperSection';
 
 import { locationService } from './services/locationService';
 
 type CitizenScreen = 'ONBOARDING' | 'HOME' | 'ACTIVE_SOS' | 'REPORT' | 'TRACKING' | 'ALERTS';
-type ViewRole = 'CITIZEN' | 'AUTHORITY' | 'SPLIT_VIEW';
+type ViewRole = 'CITIZEN' | 'AUTHORITY' | 'SPLIT_VIEW' | 'DEVELOPER';
 
 export function App() {
   const [role, setRole] = useState<ViewRole>('CITIZEN');
@@ -240,6 +241,14 @@ export function App() {
           </button>
 
           <button
+            onClick={() => setRole('DEVELOPER')}
+            aria-pressed={role === 'DEVELOPER'}
+            className={`rounded-full px-3 py-1.5 text-xs font-bold transition-all ${role === 'DEVELOPER' ? 'bg-[#5E43F3] text-white' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}
+          >
+            Developer
+          </button>
+
+          <button
             onClick={() => setRole('SPLIT_VIEW')}
             className={`hidden md:flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
               role === 'SPLIT_VIEW'
@@ -304,6 +313,7 @@ export function App() {
       )}
       {/* Main View Area */}
       <main className="flex-1 flex items-center justify-center p-2 sm:p-6 overflow-hidden">
+        {role === 'DEVELOPER' && <DeveloperSection />}
         {role === 'CITIZEN' && (
           <div className="py-4 flex justify-center w-full">
             <MobileFrame

@@ -3,17 +3,39 @@ import { Incident, DashboardStats, AIAnalysisResult, HotspotResult, EvaluationRe
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? '';
 const API_BASE = `${configuredBaseUrl}/api`;
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { cache: 'no-store', ...init });
-  const data = await response.json().catch(() => null) as { error?: string; message?: string } | null;
+async function request<T>(url: string, init?: RequestInit, timeoutMs = 12000): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  if (!response.ok) {
-    throw new Error(data?.error || data?.message || `Request failed (${response.status})`);
+  let signal: AbortSignal = controller.signal;
+  if (init?.signal) {
+    if (typeof AbortSignal !== 'undefined' && 'any' in AbortSignal && typeof (AbortSignal as unknown as { any: (signals: AbortSignal[]) => AbortSignal }).any === 'function') {
+      signal = (AbortSignal as unknown as { any: (signals: AbortSignal[]) => AbortSignal }).any([init.signal, controller.signal]);
+    } else {
+      init.signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
   }
 
-  if (!data) throw new Error('The API returned an invalid response. Check the backend connection.');
+  try {
+    const response = await fetch(url, { cache: 'no-store', ...init, signal });
+    const data = await response.json().catch(() => null) as { error?: string; message?: string } | null;
 
-  return data as T;
+    if (!response.ok) {
+      throw new Error(data?.error || data?.message || `Request failed (${response.status})`);
+    }
+
+    if (!data) throw new Error('The API returned an invalid response. Check the backend connection.');
+
+    return data as T;
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      if (init?.signal?.aborted) throw err;
+      throw new Error('Network request timed out. Please verify connection and retry.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export const api = {
@@ -23,12 +45,12 @@ export const api = {
     if (filters?.status) params.append('status', filters.status);
     if (filters?.priority) params.append('priority', filters.priority);
 
-    const data = await request<{ incidents: Incident[] }>(`${API_BASE}/incidents?${params.toString()}`);
+    const data = await request<{ incidents: Incident[] }>(`${API_BASE}/incidents?${params.toString()}`, undefined, 8000);
     return data.incidents;
   },
 
   async getIncident(id: string): Promise<Incident> {
-    const data = await request<{ incident: Incident }>(`${API_BASE}/incidents/${id}`);
+    const data = await request<{ incident: Incident }>(`${API_BASE}/incidents/${id}`, undefined, 8000);
     return data.incident;
   },
 
@@ -36,7 +58,7 @@ export const api = {
     const data = await request<{ incident: Incident }>(`${API_BASE}/incidents`, {
       method: 'POST',
       body: formData,
-    });
+    }, 35000);
     return data.incident;
   },
 
@@ -45,7 +67,7 @@ export const api = {
       signal,
       method: 'POST',
       body: formData,
-    });
+    }, 18000);
     return data.aiAnalysis;
   },
 

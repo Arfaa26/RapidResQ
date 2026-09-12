@@ -148,11 +148,12 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
 
   useEffect(() => {
     const controller = new AbortController();
-    // Clear outdated predictions as soon as an input changes.
-    // oxlint-disable-next-line react/set-state-in-effect
-    setAiPreview(null);
     setAiError('');
-    if (!mediaFile && !title.trim() && !description.trim()) { setIsAnalyzingAi(false); return; }
+    if (!mediaFile && !title.trim() && !description.trim()) {
+      setAiPreview(null);
+      setIsAnalyzingAi(false);
+      return;
+    }
     setIsAnalyzingAi(true);
     const timer = window.setTimeout(async () => {
       const form = new FormData();
@@ -185,7 +186,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
       } finally {
         if (!controller.signal.aborted) setIsAnalyzingAi(false);
       }
-    }, 800);
+    }, 600);
     return () => { window.clearTimeout(timer); controller.abort(); };
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [mediaFile, title, description, explain, previewAttempt]);
@@ -321,14 +322,22 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
               </span>
             </div>
 
-            {isAnalyzingAi ? (
+            {isAnalyzingAi && !aiPreview ? (
               <div className="flex items-center space-x-2 text-xs text-white/80 py-1">
                 <Loader2 size={14} className="animate-spin" />
                 <span>Waiting for AI analysis. You can continue editing or submit for authority review.</span>
               </div>
-            ) : aiPreview && (
-              <MLPredictionDetails analysis={aiPreview} compact />
-            )}
+            ) : aiPreview ? (
+              <div>
+                {isAnalyzingAi && (
+                  <div className="flex items-center space-x-1.5 text-[11px] text-yellow-300 mb-1.5 font-bold">
+                    <Loader2 size={12} className="animate-spin" />
+                    <span>Refining AI triage with new text…</span>
+                  </div>
+                )}
+                <MLPredictionDetails analysis={aiPreview} compact />
+              </div>
+            ) : null}
           </div>
         )}
         {!isAnalyzingAi && (aiError || aiPreview?.status === 'unavailable') && <button

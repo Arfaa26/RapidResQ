@@ -1,0 +1,37 @@
+name: Deploy free ML service
+
+on:
+  push:
+    branches: [web-app]
+    paths:
+      - 'ml-service/**'
+      - '.github/workflows/deploy-ml.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-rapidresq-ml
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install hosting publisher
+        run: python -m pip install 'huggingface_hub==1.19.0'
+      - name: Package tracked ML source
+        run: |
+          python ml-service/deploy/package_space.py --output /tmp/rapidresq-space.zip
+          python -m zipfile -e /tmp/rapidresq-space.zip /tmp/rapidresq-space
+      - name: Publish to the free Space
+        env:
+          HF_OIDC_RESOURCE: spaces/arfaa0312/rapidresq-ml
+        run: hf upload arfaa0312/rapidresq-ml /tmp/rapidresq-space . --repo-type space --commit-message "Deploy RapidResQ $GITHUB_SHA"

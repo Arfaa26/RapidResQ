@@ -103,7 +103,7 @@ class PretrainedImageClassifier(LocalModel):
             return {**self.status(), 'top3': [], 'probabilities': None, 'latencyMs': None}
         start = time.perf_counter()
         with self.lock, torch.inference_mode():
-            inputs = self.processor(images=image, return_tensors='pt')
+            inputs = self.processor(images=image, return_tensors='pt').to(self.model.device)
             features = torch.nn.functional.normalize(self.model.get_image_features(**inputs), dim=-1)
             logits = (features @ self.text_features.T) * self.model.logit_scale.exp() + self.model.logit_bias
             scores = logits.softmax(dim=-1)[0].tolist()
@@ -145,6 +145,7 @@ class PretrainedTextClassifier(LocalModel):
                 group = hypotheses[start:start + 4]
                 tokens = self.tokenizer([text] * len(group), group, padding=True, truncation='only_first',
                                         max_length=384, return_tensors='pt')
+                tokens = tokens.to(self.model.device)
                 values.append(self.model(**tokens).logits[:, self.entailment])
         logits = torch.cat(values)
         return logits[:len(TEXT_LABELS)].softmax(0).tolist(), logits[len(TEXT_LABELS):].softmax(0).tolist()
@@ -207,6 +208,7 @@ class SemanticMatcher(LocalModel):
         with self.lock, torch.inference_mode():
             for start in range(0, len(chunks), 16):
                 tokens = self.tokenizer(chunks[start:start + 16], padding=True, return_tensors='pt')
+                tokens = tokens.to(self.model.device)
                 hidden = self.model(**tokens).last_hidden_state
                 mask = tokens['attention_mask'].unsqueeze(-1).to(hidden.dtype)
                 embeddings.extend(((hidden * mask).sum(1) / mask.sum(1).clamp(min=1)).unbind())

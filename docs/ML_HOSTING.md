@@ -1,7 +1,37 @@
 # Public ML deployment
 
-Status: deployment files prepared; the Python service has not yet been hosted.
+Status: a free Space `arfaa0312/rapidresq-ml` has been created; application upload
+and Vercel connection are being validated. GitHub Actions publishes through a
+trusted publisher restricted to this repository, `web-app`, and `deploy-ml.yml`.
 The existing Vercel website and PostgreSQL database are already deployed.
+
+## Selected free plan: Gradio ZeroGPU
+
+The user selected free hosting. Use the existing free Space rather than buying
+Docker hosting. Package tracked service code with
+`python ml-service/deploy/package_space.py --output <destination.zip>` and upload
+its contents to the Space repository. Its README selects `space_app.py`, Gradio
+6.27.0 and Python 3.12. Set the private `ML_SERVICE_KEY` Space secret before boot.
+
+The entry point downloads the pinned models, loads them on ZeroGPU's virtual CUDA
+device, and executes image/text/semantic inference through `spaces.GPU`. It retains
+the existing classification and review policies. Requests and results use Gradio's
+standard queue API. Health/evaluation/hotspots do not allocate GPU time.
+
+After the Space is running, set Vercel production:
+- `ML_SERVICE_URL`: the verified HTTPS Space endpoint
+- `ML_SERVICE_TRANSPORT=gradio`
+- `ML_SERVICE_KEY`: the same private Space secret
+- `ML_TIMEOUT_MS=45000`
+
+Redeploy and verify all three models ready plus a synthetic photo/text preview.
+No real incident should be created for validation. Requests use a bounded queue
+and timeout. Free GPU quotas, sleeping or provider errors retain manual review.
+This is a free project demo, not an always-on emergency dispatch service.
+
+The free plan supports up to two ZeroGPU Spaces for eligible accounts. CPU Basic
+Docker is not the selected plan. Do not purchase a subscription or bypass the
+provider's quotas. See https://huggingface.co/docs/hub/spaces-zerogpu.
 
 ## Prepared container
 

@@ -30,6 +30,11 @@ torch.set_num_threads(int(os.environ.get('TORCH_NUM_THREADS', '2')))
 
 @asynccontextmanager
 async def lifespan(app):
+    initialize_models(app)
+    yield
+
+
+def initialize_models(app):
     if os.environ.get('ML_REQUIRE_KEY') == '1' and not os.environ.get('ML_SERVICE_KEY'):
         raise RuntimeError('ML_SERVICE_KEY is required for the hosted ML service.')
     app.state.mode = os.environ.get('ML_MODEL_MODE', 'pretrained')
@@ -45,7 +50,6 @@ async def lifespan(app):
         app.state.text = TextClassifier(MODEL_DIR / 'text')
         app.state.similarity = None
     app.state.inference_gate = asyncio.Semaphore(1)
-    yield
 
 
 def authorize(x_ml_service_key: str | None = Header(default=None)):

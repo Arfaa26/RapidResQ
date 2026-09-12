@@ -54,6 +54,26 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const locationRequestRef = useRef<Promise<LocationData> | null>(null);
 
+  const [isManualCategory, setIsManualCategory] = useState(false);
+  const isManualCategoryRef = useRef(false);
+
+  const aiSuggestedCategory: IncidentCategory | null = React.useMemo(() => {
+    if (!aiPreview) return null;
+    if (aiPreview.detectedCategory && aiPreview.detectedCategory !== 'HAZARD') {
+      return aiPreview.detectedCategory;
+    }
+    if (aiPreview.disaster?.status === 'ready' && aiPreview.disaster.routingCategory && aiPreview.disaster.routingCategory !== 'HAZARD') {
+      return aiPreview.disaster.routingCategory as IncidentCategory;
+    }
+    if (aiPreview.image?.top3?.[0]?.label && aiPreview.image.top3[0].label !== 'HAZARD') {
+      return aiPreview.image.top3[0].label as IncidentCategory;
+    }
+    if (aiPreview.text?.category && aiPreview.text.category !== 'HAZARD') {
+      return aiPreview.text.category as IncidentCategory;
+    }
+    return null;
+  }, [aiPreview]);
+
   useEffect(() => { previewLocationRef.current = selectedLocation; }, [selectedLocation]);
 
   const refreshAccurateLocation = useCallback(async (forceRefresh = false): Promise<LocationData> => {
@@ -111,7 +131,8 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
       setMediaFile(file);
       const url = URL.createObjectURL(file);
       setMediaPreview(url);
-
+      setIsManualCategory(false);
+      isManualCategoryRef.current = false;
     }
   };
 
@@ -127,7 +148,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
       const form = new FormData();
       form.append('title', title);
       form.append('description', description);
-      form.append('categoryHint', selectedCategory);
+      form.append('categoryHint', isManualCategoryRef.current ? selectedCategory : '');
       form.append('lat', String(previewLocationRef.current.lat));
       form.append('lng', String(previewLocationRef.current.lng));
       form.append('explain', String(explain));
@@ -136,15 +157,28 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
         // Aborting a browser fetch does not stop a cloud GPU job. Let it finish
         // before sending the latest draft; discard responses to older drafts.
         const result = await previewQueueRef.current.run(() => api.previewAI(form), controller.signal);
-        if (result && !controller.signal.aborted) setAiPreview(result);
+        if (result && !controller.signal.aborted) {
+          setAiPreview(result);
+          const suggested: IncidentCategory | null = (
+            (result.detectedCategory && result.detectedCategory !== 'HAZARD') ? result.detectedCategory :
+            (result.disaster?.status === 'ready' && result.disaster.routingCategory && result.disaster.routingCategory !== 'HAZARD') ? result.disaster.routingCategory as IncidentCategory :
+            (result.image?.top3?.[0]?.label && result.image.top3[0].label !== 'HAZARD') ? result.image.top3[0].label as IncidentCategory :
+            (result.text?.category && result.text.category !== 'HAZARD') ? result.text.category as IncidentCategory :
+            null
+          );
+          if (suggested && !isManualCategoryRef.current) {
+            setSelectedCategory(suggested);
+          }
+        }
       } catch (e) {
         if (!controller.signal.aborted) setAiError(e instanceof Error ? e.message : 'Analysis unavailable. You can still submit this report.');
       } finally {
         if (!controller.signal.aborted) setIsAnalyzingAi(false);
       }
-    }, 1000);
+    }, 800);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [mediaFile, title, description, selectedCategory, explain, previewAttempt]);
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [mediaFile, title, description, explain, previewAttempt]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -221,6 +255,9 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
                   setMediaFile(null);
                   setMediaPreview(null);
                   setAiPreview(null);
+                  setIsManualCategory(false);
+                  isManualCategoryRef.current = false;
+                  setSelectedCategory('HAZARD');
                   if (fileInputRef.current) fileInputRef.current.value = '';
                 }}
                 className="absolute top-2 right-2 bg-black/70 hover:bg-black text-white text-xs px-2.5 py-1 rounded-full backdrop-blur-sm"
@@ -283,28 +320,61 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
 
         {/* Category Picker Chips */}
         <div className="bg-white rounded-3xl p-4 shadow-sm">
-          <label className="text-xs font-bold text-[#1E1B4B] block mb-2">
-            2. Incident Category
-          </label>
+          <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+            <label className="text-xs font-bold text-[#1E1B4B]">
+              2. Incident Category
+            </label>
+            <div className="flex items-center gap-1.5">
+              {aiSuggestedCategory && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#5E43F3] bg-purple-100/80 px-2 py-0.5 rounded-full border border-purple-200">
+                  <Sparkles size={11} className="text-yellow-600" />
+                  {selectedCategory === aiSuggestedCategory ? 'AI Auto-Selected' : `AI detected: ${categories.find(c => c.id === aiSuggestedCategory)?.label || aiSuggestedCategory}`}
+                </span>
+              )}
+              {isManualCategory && aiSuggestedCategory && selectedCategory !== aiSuggestedCategory && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory(aiSuggestedCategory);
+                    setIsManualCategory(false);
+                    isManualCategoryRef.current = false;
+                  }}
+                  className="text-[10px] font-bold text-[#5E43F3] bg-white border border-[#5E43F3]/30 px-1.5 py-0.5 rounded-md hover:bg-purple-50 transition-colors"
+                >
+                  Reset to AI
+                </button>
+              )}
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-2">
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => {
-                  setSelectedCategory(cat.id);
-
-                }}
-                className={`flex items-center space-x-2 p-2.5 rounded-xl border text-xs font-semibold transition-all ${
-                  selectedCategory === cat.id
-                    ? 'border-[#5E43F3] bg-purple-50 text-[#5E43F3] shadow-sm font-bold'
-                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {cat.icon}
-                <span className="truncate">{cat.label}</span>
-              </button>
-            ))}
+            {categories.map((cat) => {
+              const isAiMatch = aiSuggestedCategory === cat.id;
+              const isSelected = selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory(cat.id);
+                    setIsManualCategory(true);
+                    isManualCategoryRef.current = true;
+                  }}
+                  className={`relative flex items-center space-x-2 p-2.5 rounded-xl border text-xs font-semibold transition-all ${
+                    isSelected
+                      ? 'border-[#5E43F3] bg-purple-50 text-[#5E43F3] shadow-sm font-bold ring-1 ring-[#5E43F3]/30'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  {cat.icon}
+                  <span className="truncate">{cat.label}</span>
+                  {isAiMatch && (
+                    <span className="ml-auto text-[10px] font-bold bg-[#5E43F3] text-white px-1.5 py-0.5 rounded-full">
+                      AI
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 

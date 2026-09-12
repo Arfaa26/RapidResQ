@@ -168,6 +168,7 @@ export interface EvaluationResult {
 export interface DisasterPrediction {
   status: string; dataset: 'MEDIC'; model: string; modelVersion?: string;
   incidentType: string | null; candidateType?: string; predictedLabel?: string;
+  routingCategory?: string;
   confidence: number | null; threshold?: number; lowConfidence?: boolean;
   probabilities?: Record<string, number>; needsReview: boolean; message?: string;
 }

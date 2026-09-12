@@ -1,3 +1,5 @@
+export class HostedInferenceError extends Error {}
+
 /** Gradio's documented POST + SSE result protocol, using server-side secrets only. */
 export async function gradioRequest<T>(base: string, endpoint: string, body: FormData | object | undefined, signal: AbortSignal): Promise<T> {
   let payload: object = body || {};
@@ -36,7 +38,16 @@ export async function gradioRequest<T>(base: string, endpoint: string, body: For
         buffer = buffer.slice(boundary + 2);
         const lines = event.split('\n');
         const type = lines.find(line => line.startsWith('event:'))?.slice(6).trim();
-        if (type === 'error') throw new Error('Free ML hosting busy, quota exhausted, or inference failed');
+        if (type === 'error') {
+          const details = lines.filter(line => line.startsWith('data:')).join(' ').toLowerCase();
+          if (details.includes('quota') || details.includes('daily limit')) {
+            throw new HostedInferenceError('The free AI host has reached its GPU usage limit. Analysis can resume when the provider resets the quota. You can submit for authority review now.');
+          }
+          if (details.includes('sign in') || details.includes('log in') || details.includes('authenticated')) {
+            throw new HostedInferenceError('The free AI host requires an authenticated GPU request. You can submit for authority review while the hosting connection is updated.');
+          }
+          throw new HostedInferenceError('The AI host could not complete this request. Retry shortly or submit for authority review.');
+        }
         if (type === 'complete') {
           const data = lines.filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n');
           const outputs = JSON.parse(data) as unknown;

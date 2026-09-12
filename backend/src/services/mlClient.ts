@@ -19,8 +19,9 @@ export async function mlRequest<T>(endpoint: '/analyze' | '/health' | '/duplicat
     if (!response.ok) throw new MLUnavailableError(`ML service returned HTTP ${response.status}.`);
     return await response.json() as T;
   } catch (error) {
+    if (error instanceof HostedInferenceError) throw new MLUnavailableError(error.message);
     if (error instanceof MLUnavailableError) throw error;
     throw new MLUnavailableError('ML service unavailable or timed out.');
   }
 }
-import { gradioRequest } from './gradioClient.js';
+import { gradioRequest, HostedInferenceError } from './gradioClient.js';

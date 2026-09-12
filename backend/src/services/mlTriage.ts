@@ -1,5 +1,5 @@
 import type { AIAnalysisResult, IncidentCategory, DepartmentType } from '../types/index.js';
-import { mlRequest } from './mlClient.js';
+import { mlRequest, MLUnavailableError } from './mlClient.js';
 
 export const categories = ['FIRE', 'ACCIDENT', 'FLOOD', 'MEDICAL', 'CRIME', 'CIVIC', 'HAZARD'] as const;
 export interface TriageInput {
@@ -68,7 +68,12 @@ export async function triageIncident(input: TriageInput): Promise<AIAnalysisResu
     const result = await mlRequest<AIAnalysisResult>('/analyze', form);
     if (!validAnalysis(result)) return manualReview(input, 'ML response could not be validated.');
     return result;
-  } catch {
-    return manualReview(input, 'ML service unavailable or not configured.');
+  } catch (error) {
+    if (error instanceof MLUnavailableError && (error.message.startsWith('The free AI host') || error.message.startsWith('The AI host'))) {
+      return manualReview(input, error.message);
+    }
+    return manualReview(input, process.env.ML_SERVICE_URL
+      ? 'AI analysis is temporarily unavailable. The host may be busy, starting, or at its usage limit. Retry shortly or submit for authority review.'
+      : 'ML service is not configured.');
   }
 }

@@ -15,14 +15,15 @@ export function MLPredictionDetails({ analysis, compact = false }: { analysis: A
     <p>Department: {analysis.department.replaceAll('_', ' ')}</p>
     <p className="leading-relaxed">{analysis.reasoning}</p>
     {analysis.image && <div>
-      <h4 className="font-bold">Image: {analysis.image.status.replaceAll('_', ' ')}</h4>
+      <h4 className="font-bold">Image: {analysis.image.status === 'unsupported_media' ? 'video retained as evidence' : analysis.image.status === 'not_provided' ? 'no photo attached' : analysis.image.status.replaceAll('_', ' ')}</h4>
+      {analysis.image.status === 'unsupported_media' && <p>Video frames are not analyzed. Text analysis can still run when a description is provided.</p>}
       {analysis.image.uncertain && <p>Image category is uncertain. Review the photo and description together.</p>}
       {analysis.image.top3?.map(p => <div key={p.label} className="mt-1 flex items-center gap-3">
         <span className="w-24 shrink-0">{p.label}</span>
         <progress aria-label={`${p.label} ${pretrained ? 'match score' : 'probability'}`} value={p.probability} max={1} className="h-2 min-w-0 flex-1 accent-purple-500" />
         <span>{(p.probability * 100).toFixed(1)}%</span>
       </div>)}
-      {analysis.image.explanationStatus === 'not_supported' && <p>A heatmap is unavailable for this model. Its comparison method is described below.</p>}
+      {analysis.image.explanationStatus === 'not_supported' && <p>Photo analysis is available; this model does not generate an attention heatmap.</p>}
       {analysis.image.gradCam && <figure className="mt-3">
         <img src={analysis.image.gradCam} alt="Grad-CAM activation on the image crop analyzed by the model" className="max-w-full w-56 rounded-lg" />
         <figcaption className="mt-1">Grad-CAM: model attention on the analyzed crop; it does not prove the incident type.</figcaption>

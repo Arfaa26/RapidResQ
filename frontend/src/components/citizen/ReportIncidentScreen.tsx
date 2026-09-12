@@ -14,6 +14,7 @@ import {
 import { Incident, LocationData, AIAnalysisResult, IncidentCategory } from '../../types';
 import { MLPredictionDetails } from '../common/MLPredictionDetails';
 import { api } from '../../services/api';
+import { createPreviewQueue } from '../../services/previewQueue';
 import { InteractiveMap } from '../common/InteractiveMap';
 import { LiveLocationStatus } from '../common/LiveLocationStatus';
 import { soundAlerts } from '../../utils/audioAlert';
@@ -47,8 +48,13 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
 
   const [aiError, setAiError] = useState('');
   const [explain, setExplain] = useState(false);
+  const [previewAttempt, setPreviewAttempt] = useState(0);
+  const previewQueueRef = useRef(createPreviewQueue<AIAnalysisResult>());
+  const previewLocationRef = useRef(selectedLocation);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const locationRequestRef = useRef<Promise<LocationData> | null>(null);
+
+  useEffect(() => { previewLocationRef.current = selectedLocation; }, [selectedLocation]);
 
   const refreshAccurateLocation = useCallback(async (forceRefresh = false): Promise<LocationData> => {
     if (locationRequestRef.current) return locationRequestRef.current;
@@ -122,21 +128,23 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
       form.append('title', title);
       form.append('description', description);
       form.append('categoryHint', selectedCategory);
-      form.append('lat', String(selectedLocation.lat));
-      form.append('lng', String(selectedLocation.lng));
+      form.append('lat', String(previewLocationRef.current.lat));
+      form.append('lng', String(previewLocationRef.current.lng));
       form.append('explain', String(explain));
       if (mediaFile) form.append('media', mediaFile);
       try {
-        const result = await api.previewAI(form, controller.signal);
-        if (!controller.signal.aborted) setAiPreview(result);
+        // Aborting a browser fetch does not stop a cloud GPU job. Let it finish
+        // before sending the latest draft; discard responses to older drafts.
+        const result = await previewQueueRef.current.run(() => api.previewAI(form), controller.signal);
+        if (result && !controller.signal.aborted) setAiPreview(result);
       } catch (e) {
         if (!controller.signal.aborted) setAiError(e instanceof Error ? e.message : 'Analysis unavailable. You can still submit this report.');
       } finally {
         if (!controller.signal.aborted) setIsAnalyzingAi(false);
       }
-    }, 450);
+    }, 1000);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [mediaFile, title, description, selectedCategory, selectedLocation.lat, selectedLocation.lng, explain]);
+  }, [mediaFile, title, description, selectedCategory, explain, previewAttempt]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -242,10 +250,11 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
           />
         </div>
 
-        <label className="flex items-center gap-2 px-2 text-sm">
+        {aiPreview?.image?.status === 'ready' && aiPreview.image.inferenceMode !== 'pretrained_zero_shot' && <label className="flex items-center gap-2 px-2 text-sm">
           <input type="checkbox" checked={explain} onChange={e => setExplain(e.target.checked)} />
-          Include image explanation (when supported)
-        </label>
+          Include image attention heatmap
+        </label>}
+        {mediaFile?.type.startsWith('video/') && <p className="px-2 text-xs text-slate-600">Video is saved as evidence. Add a description for AI analysis; video frames are not analyzed.</p>}
         {aiError && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{aiError} You can still submit for authority review.</p>}
         {/* AI Triage Live Assistant Badge */}
         {(aiPreview || isAnalyzingAi) && (
@@ -253,20 +262,24 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
             <div className="flex items-center space-x-2 mb-1.5">
               <Sparkles size={16} className="text-yellow-300 animate-pulse" />
               <span className="text-xs font-extrabold tracking-wide">
-                {isAnalyzingAi ? 'AI Analyzing Media & Text...' : 'AI Triage Detection'}
+                {isAnalyzingAi ? 'Checking your report…' : 'AI Triage Detection'}
               </span>
             </div>
 
             {isAnalyzingAi ? (
               <div className="flex items-center space-x-2 text-xs text-white/80 py-1">
                 <Loader2 size={14} className="animate-spin" />
-                <span>Extracting visual features, hazard classification & priority...</span>
+                <span>Waiting for AI analysis. You can continue editing or submit for authority review.</span>
               </div>
             ) : aiPreview && (
               <MLPredictionDetails analysis={aiPreview} compact />
             )}
           </div>
         )}
+        {!isAnalyzingAi && (aiError || aiPreview?.status === 'unavailable') && <button
+          type="button" onClick={() => setPreviewAttempt(attempt => attempt + 1)}
+          className="rounded-xl bg-purple-100 px-4 py-2 text-sm font-semibold text-purple-800"
+        >Retry AI analysis</button>}
 
         {/* Category Picker Chips */}
         <div className="bg-white rounded-3xl p-4 shadow-sm">

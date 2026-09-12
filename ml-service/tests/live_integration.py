@@ -15,6 +15,7 @@ from PIL import Image
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--base', required=True)
+    parser.add_argument('--mode', choices=['trained', 'pretrained'], default='trained')
     args = parser.parse_args()
     if urlparse(args.base).hostname not in ('127.0.0.1', 'localhost'):
         raise ValueError('This smoke check only accepts localhost')
@@ -33,8 +34,19 @@ def main():
     preview = client.post('/api/ai/preview', data=form, files=files)
     preview.raise_for_status()
     analysis = preview.json()['aiAnalysis']
-    assert analysis['image']['status'] == 'training_required'
-    assert analysis['confidence'] is None
+    if args.mode == 'pretrained':
+        assert analysis['source'] == 'ml'
+        assert analysis['needsReview'] is True
+        for kind in ['image', 'text']:
+            model = analysis[kind]
+            assert model['status'] == 'ready'
+            assert model['inferenceMode'] == 'pretrained_zero_shot'
+            assert model['calibrated'] is False and model['trainedOnRapidResQ'] is False
+            assert abs(sum(model['probabilities'].values()) - 1) < .001
+        assert len(analysis['image']['top3']) == 3
+    else:
+        assert analysis['image']['status'] == 'training_required'
+        assert analysis['confidence'] is None
     created = client.post('/api/incidents', data=form, files=files)
     created.raise_for_status()
     first = created.json()['incident']
@@ -43,6 +55,9 @@ def main():
     second = created.json()['incident']
     # Other smoke runs may leave same visual fixture: identify its suggested primary.
     assert second['duplicate']['status'] == 'POSSIBLE'
+    if args.mode == 'pretrained':
+        assert second['duplicateCheck']['semanticModel']['status'] == 'ready'
+        assert second['duplicateCheck']['semanticCandidatesChecked'] >= 1
     target = second['duplicate']['of']
     original_count = client.get(f'/api/incidents/{target}').json()['incident']['reportCount']
     confirmed = client.patch(f"/api/incidents/{second['id']}/duplicate", json={'decision': 'CONFIRM'})

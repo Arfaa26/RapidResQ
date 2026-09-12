@@ -8,14 +8,15 @@ This is the existing **React/Vite + Express** web application from the `web-app`
 
 The application now integrates a separate FastAPI service with:
 
-- MobileNetV3-Small image training/inference, actual softmax probabilities, top-three predictions and optional Grad-CAM.
-- TF-IDF + Logistic Regression for text category/priority, real class probabilities and learned feature contributions.
+- SigLIP 2 pretrained photo suggestions and top-three match scores; optional MobileNetV3 training/Grad-CAM retained.
+- DeBERTa pretrained English text category/urgency suggestions; optional TF-IDF + Logistic Regression training retained.
+- Multilingual MiniLM semantic duplicate matching with explicit lexical fallback and existing geographic/time gates.
 - A documented image/text/context priority policy with explicit SOS override.
 - Possible duplicate checks using image pHash, text similarity, GPS distance and report time, followed by authority confirmation.
 - DBSCAN hotspot maps and time-window incident trends.
 - An evaluation dashboard backed only by held-out test artifacts matching the loaded model version.
 
-**No incident datasets or trained model weights are bundled.** The supplied CSVs contain headers only. Until reviewed datasets are provided and training/evaluation are run, the UI explicitly shows training required/manual review and no fabricated confidence or accuracy. Synthetic software-test models never enter the runtime model directories.
+**The default runtime uses pretrained models, with mandatory authority review and uncalibrated score labels.** The official weights are downloaded separately using the setup command. No RapidResQ-specific training or accuracy is claimed. Missing snapshots show setup required. The supplied historical-disaster CSV is unsuitable for this image/text triage task and was not used for training.
 
 ## Architecture
 
@@ -36,7 +37,7 @@ Node remains the main API. The browser never calls FastAPI directly or receives 
 2. Run `npm install` in this repository.
 3. Create a Python environment and install `ml-service/requirements.txt`.
 4. Preserve your existing `backend/.env`; add `ML_SERVICE_URL=http://127.0.0.1:8000` and keep `DATABASE_URL` if configured.
-5. From `ml-service`, start `python -m uvicorn app:app --host 127.0.0.1 --port 8000` using that environment.
+5. From `ml-service`, run `python -m pretrained.download` once, then start `python -m uvicorn app:app --host 127.0.0.1 --port 8000` using that environment.
 6. From the repository root, run `npm run dev` and open `http://localhost:3000`.
 
 See the [ML service guide](ml-service/README.md) for exact PowerShell commands, training, test evaluation and deployment configuration.
@@ -57,6 +58,6 @@ Run `python -m pytest -q` from `ml-service` in the Python environment. PostgreSQ
 
 ## Deployment
 
-Keep the existing Vercel frontend and Node API configuration. Deploy FastAPI separately with trained model artifacts, HTTPS and a shared `ML_SERVICE_KEY`, then configure Node's `ML_SERVICE_URL`. The Dockerfile requires a service key and installs CPU PyTorch wheels. Training is never performed in the frontend or during requests.
+Keep the existing Vercel frontend and Node API configuration. Deploy FastAPI separately with installed pretrained snapshots (or optional trained artifacts), HTTPS and a shared `ML_SERVICE_KEY`, then configure Node's `ML_SERVICE_URL`. The Dockerfile requires a service key and installs CPU PyTorch wheels. Training is never performed in the frontend or during requests.
 
 The inherited authority interface has no authentication/role enforcement. Use a controlled project-demo environment until those controls and real-world ML validation are added. The app does not contact official emergency services.

@@ -33,3 +33,5 @@ ml-service/models/**/*.pt
 ml-service/models/**/*.joblib
 ml-service/models/**/evaluation.json
 ml-service/datasets/raw/
+ml-service/models/pretrained/
+ml-service/models/evaluation-pretrained/

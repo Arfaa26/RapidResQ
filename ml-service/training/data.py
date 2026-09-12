@@ -10,7 +10,7 @@ def digest(value):
     return hashlib.sha256(value).hexdigest()
 
 
-def read_manifest(path, kind):
+def read_manifest(path, kind, required_splits=('train', 'val', 'test')):
     path = Path(path).resolve()
     rows = list(csv.DictReader(path.open(encoding='utf-8-sig', newline='')))
     if not rows:
@@ -48,7 +48,7 @@ def read_manifest(path, kind):
             if row[key] in registry and registry[row[key]] != row['split']:
                 raise ValueError(f'Data leakage: {key} appears across splits')
             registry[row[key]] = row['split']
-    for split in ['train', 'val', 'test']:
+    for split in required_splits:
         subset = [r for r in rows if r['split'] == split]
         if set(r['category'] for r in subset) != set(CATEGORIES):
             raise ValueError(f'{split} must include all six categories')

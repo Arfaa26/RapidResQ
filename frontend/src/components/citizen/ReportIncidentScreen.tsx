@@ -228,7 +228,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
                 <Camera size={22} />
               </div>
               <span className="text-xs font-bold text-[#1E1B4B] mb-0.5">Take Photo or Upload Media</span>
-              <span className="text-[10px] text-gray-500">ML analysis supports authority review when trained models are available</span>
+              <span className="text-[10px] text-gray-500">Pretrained ML suggestions support authority review</span>
             </div>
           )}
 
@@ -243,7 +243,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
 
         <label className="flex items-center gap-2 px-2 text-sm">
           <input type="checkbox" checked={explain} onChange={e => setExplain(e.target.checked)} />
-          Include image explanation (Grad-CAM)
+          Include image explanation (when supported)
         </label>
         {aiError && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{aiError} You can still submit for authority review.</p>}
         {/* AI Triage Live Assistant Badge */}
@@ -299,6 +299,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
           <label className="text-xs font-bold text-[#1E1B4B] block">
             3. Details & Description
           </label>
+          <p className="text-xs text-slate-500">For automatic text analysis, write a short report in English. Include immediate danger and any injuries.</p>
           <input
             type="text"
             placeholder="Short Title (e.g. Broken pipe flooding sidewalk)"

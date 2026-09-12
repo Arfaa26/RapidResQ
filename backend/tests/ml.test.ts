@@ -46,6 +46,17 @@ test('model-ready claims require real distributions and provenance', () => {
   assert.equal(validAnalysis({ ...manual, source: 'ml', image: { status: 'ready', modelVersion: 'test', probabilities: { FIRE: 9 } } }), false);
 });
 
+test('pretrained suggestions require uncalibrated provenance and human review', () => {
+  const result = { ...manualReview({ description: '' }, ''), source: 'ml' as const, needsReview: true,
+    text: { status: 'ready', modelVersion: 'fixture', category: 'FIRE' as const,
+      categoryProbabilities: { FIRE: 1 }, probabilities: { HIGH: 1 }, inferenceMode: 'pretrained_zero_shot' as const,
+      calibrated: false, trainedOnRapidResQ: false, scoreType: 'relative_candidate_score' } };
+  assert.equal(validAnalysis(result), true);
+  assert.equal(validAnalysis({ ...result, needsReview: false }), false);
+  assert.equal(validAnalysis({ ...result, text: { ...result.text, calibrated: true } }), false);
+  assert.equal(validAnalysis({ ...result, text: { ...result.text, categoryProbabilities: { FIRE: NaN } } }), false);
+});
+
 test('context comes only from configured geographic zones', () => {
   delete process.env.ML_CONTEXT_ZONES;
   assert.equal(resolveContext(19.04, 73.06), undefined);

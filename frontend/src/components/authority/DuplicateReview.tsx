@@ -19,6 +19,8 @@ export function DuplicateReview({ incident, incidents, onUpdate, onOpen }: {
     <h3 className="font-bold">Reports: {incident.reportCount ?? 1} confirmed</h3>
     {incident.duplicateCheck?.status === 'unavailable' && <p className="text-amber-300">Duplicate detection was unavailable at submission. Review nearby reports.</p>}
     {incident.duplicateCheck?.candidatesTruncated && <p className="text-amber-300">Duplicate search was limited to 500 nearby reports.</p>}
+    {incident.duplicateCheck?.semanticModel && <p>Semantic text model: {incident.duplicateCheck.semanticModel.status.replaceAll('_', ' ')} · {incident.duplicateCheck.semanticCandidatesChecked ?? 0} candidates checked. Similarity suggests a match; it does not confirm one.</p>}
+    {incident.duplicateCheck?.semanticCandidatesTruncated && <p>Semantic matching covered a bounded subset of nearby reports; the remaining reports used word similarity and image hashes.</p>}
     {incident.duplicate ? <>
       <p className="font-semibold">{incident.duplicate.status === 'POSSIBLE' ? 'Possible duplicate of' : incident.duplicate.status === 'CONFIRMED' ? 'Grouped under' : 'Duplicate suggestion rejected for'} {incident.duplicate.of}</p>
       <p>{incident.duplicate.match.reason} · {incident.duplicate.match.distanceMeters.toFixed(0)} m · {incident.duplicate.match.timeDifferenceMinutes.toFixed(1)} minutes apart</p>

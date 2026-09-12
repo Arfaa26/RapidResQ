@@ -5,3 +5,4 @@ datasets
 tests
 .env
 .torch-cache
+models/pretrained/*/.cache

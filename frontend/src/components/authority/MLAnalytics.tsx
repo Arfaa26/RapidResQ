@@ -76,7 +76,9 @@ export function MLEvaluation() {
     {models && Object.entries(models).map(([name, result]) => <article key={name} className={panel}>
       <h3 className="text-base font-bold capitalize">{name} model</h3>
       <p>Status: {result.model.status.replaceAll('_', ' ')}</p>
-      {!result.evaluation ? <p className="rounded-lg bg-amber-900/20 p-3 text-amber-200">{result.model.status === 'ready' ? 'Held-out evaluation is required for this model version.' : 'Training and held-out evaluation are required.'} No accuracy values are available.</p> : <>
+      {result.model.inferenceMode === 'pretrained_zero_shot' && <p>Pretrained model · no RapidResQ fine-tuning. Published general benchmarks are not project accuracy.</p>}
+      <p className="break-words">{result.model.modelVersion}</p>
+      {!result.evaluation ? <p className="rounded-lg bg-amber-900/20 p-3 text-amber-200">{result.model.status === 'ready' ? 'Held-out evaluation is required for this model version.' : result.model.status === 'setup_required' ? 'Download the pretrained models and restart the ML service.' : 'Training and held-out evaluation are required.'} No accuracy values are available.</p> : <>
         <p>{result.evaluation.algorithm} · {result.evaluation.modelVersion}</p>
         <p>{result.evaluation.sampleCount} test samples · Evaluated {new Date(result.evaluation.evaluatedAt).toLocaleString()}</p>
         <p>Latency: mean {result.evaluation.latencyMs.mean.toFixed(1)} ms · p95 {result.evaluation.latencyMs.p95.toFixed(1)} ms</p>

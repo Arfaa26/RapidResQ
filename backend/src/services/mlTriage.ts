@@ -40,6 +40,16 @@ export function validAnalysis(value: AIAnalysisResult): boolean {
     if (!model.modelVersion || !model.probabilities) return false;
     const values = Object.values(model.probabilities);
     if (!values.length || !values.every(probability) || Math.abs(values.reduce((a, b) => a + b, 0) - 1) > .001) return false;
+    if (model.inferenceMode === 'pretrained_zero_shot' && (model.calibrated !== false
+      || model.trainedOnRapidResQ !== false || model.scoreType !== 'relative_candidate_score' || value.needsReview !== true)) return false;
+    if (model.confidence !== undefined && !probability(model.confidence)) return false;
+    if (model.severityScore !== undefined && !probability(model.severityScore)) return false;
+  }
+  if (value.text?.status === 'ready') {
+    const text = value.text;
+    if (!text.category || !categories.includes(text.category) || !text.categoryProbabilities) return false;
+    const scores = Object.values(text.categoryProbabilities);
+    if (!scores.length || !scores.every(probability) || Math.abs(scores.reduce((a, b) => a + b, 0) - 1) > .001) return false;
   }
   if (value.source === 'ml' && value.image?.status !== 'ready' && value.text?.status !== 'ready') return false;
   if (value.image?.status === 'ready' && (value.image.top3?.length !== 3 || !value.image.top3.every(p => probability(p.probability) && categories.includes(p.label as IncidentCategory)))) return false;

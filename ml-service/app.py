@@ -1,4 +1,5 @@
 import hmac
+import asyncio
 import io
 import json
 import os
@@ -31,8 +32,19 @@ torch.set_num_threads(int(os.environ.get('TORCH_NUM_THREADS', '2')))
 async def lifespan(app):
     if os.environ.get('ML_REQUIRE_KEY') == '1' and not os.environ.get('ML_SERVICE_KEY'):
         raise RuntimeError('ML_SERVICE_KEY is required for the hosted ML service.')
-    app.state.image = ImageClassifier(MODEL_DIR / 'image')
-    app.state.text = TextClassifier(MODEL_DIR / 'text')
+    app.state.mode = os.environ.get('ML_MODEL_MODE', 'pretrained')
+    if app.state.mode not in ('pretrained', 'trained'):
+        raise RuntimeError('ML_MODEL_MODE must be pretrained or trained')
+    if app.state.mode == 'pretrained':
+        from pretrained.models import PretrainedImageClassifier, PretrainedTextClassifier, SemanticMatcher
+        app.state.image = PretrainedImageClassifier(MODEL_DIR / 'pretrained' / 'image')
+        app.state.text = PretrainedTextClassifier(MODEL_DIR / 'pretrained' / 'text')
+        app.state.similarity = SemanticMatcher(MODEL_DIR / 'pretrained' / 'similarity')
+    else:
+        app.state.image = ImageClassifier(MODEL_DIR / 'image')
+        app.state.text = TextClassifier(MODEL_DIR / 'text')
+        app.state.similarity = None
+    app.state.inference_gate = asyncio.Semaphore(1)
     yield
 
 
@@ -48,7 +60,20 @@ app = FastAPI(title='RapidResQ ML Service', version='1.0.0', lifespan=lifespan,
 
 @app.get('/health')
 def health():
-    return {'status': 'ok', 'image': app.state.image.status(), 'text': app.state.text.status()}
+    return {'status': 'ok', 'mode': app.state.mode, 'image': app.state.image.status(), 'text': app.state.text.status(),
+            'similarity': app.state.similarity.status() if app.state.similarity else {'status': 'lexical_fallback'}}
+
+
+async def bounded_inference(function, *args):
+    # Reject overload instead of allowing abandoned preview requests to form an unbounded queue.
+    try:
+        await asyncio.wait_for(app.state.inference_gate.acquire(), timeout=.5)
+    except TimeoutError:
+        raise HTTPException(503, 'ML service busy; retry shortly or submit for manual review')
+    try:
+        return await run_in_threadpool(function, *args)
+    finally:
+        app.state.inference_gate.release()
 
 
 def analyze_bytes(raw, mime, title, description, category_hint, explain, context):
@@ -90,13 +115,13 @@ async def analyze(title: str = Form(default='', max_length=500), description: st
         await media.close()
     if raw and len(raw) > MAX_BYTES:
         raise HTTPException(413, 'Maximum upload is 4 MB')
-    return await run_in_threadpool(analyze_bytes, raw, media.content_type or '' if media else '',
+    return await bounded_inference(analyze_bytes, raw, media.content_type or '' if media else '',
                                   title, description, categoryHint, explain, parsed_context)
 
 
 @app.post('/duplicates')
-def duplicate_check(request: DuplicateRequest):
-    return duplicates(request)
+async def duplicate_check(request: DuplicateRequest):
+    return await bounded_inference(duplicates, request, app.state.similarity)
 
 
 @app.post('/hotspots')
@@ -109,7 +134,8 @@ def evaluation():
     results = {}
     for name in ['image', 'text']:
         model = getattr(app.state, name)
-        artifact = MODEL_DIR / name / 'evaluation.json'
+        artifact = (MODEL_DIR / 'evaluation-pretrained' / name / 'evaluation.json' if app.state.mode == 'pretrained'
+                    else MODEL_DIR / name / 'evaluation.json')
         result = None
         if artifact.exists():
             try:

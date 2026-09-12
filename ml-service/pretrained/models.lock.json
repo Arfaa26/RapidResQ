@@ -1,0 +1,5 @@
+{
+  "image": {"repo": "google/siglip2-base-patch16-224", "revision": "75de2d55ec2d0b4efc50b3e9ad70dba96a7b2fa2", "license": "Apache-2.0"},
+  "text": {"repo": "MoritzLaurer/deberta-v3-base-zeroshot-v2.0", "revision": "8e7e5af5983a0ddb1a5b45a38b129ab69e2258e8", "license": "MIT; see model card for training-data licenses"},
+  "similarity": {"repo": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42", "license": "Apache-2.0"}
+}

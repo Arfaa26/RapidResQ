@@ -113,6 +113,15 @@ export interface DashboardStats {
 }
 
 export interface ModelPrediction {
+  inferenceMode?: 'pretrained_zero_shot' | 'pretrained_embeddings';
+  trainedOnRapidResQ?: boolean;
+  scoreType?: string;
+  calibrated?: boolean;
+  uncertain?: boolean;
+  priorityUncertain?: boolean;
+  explanation?: string;
+  explanationStatus?: string;
+  hypotheses?: Array<{ label: string; description: string; score: number }>;
   status: string;
   modelVersion?: string;
   label?: string;
@@ -137,6 +146,9 @@ export interface DuplicateMatch {
   reason: string;
 }
 export interface DuplicateCheck {
+  semanticCandidatesTruncated?: boolean;
+  semanticCandidatesChecked?: number;
+  semanticModel?: { status: string; modelVersion?: string };
   status: 'checked' | 'unavailable';
   matches: DuplicateMatch[];
   method: string;
@@ -159,7 +171,7 @@ export interface EvaluationMetrics {
 }
 export interface EvaluationResult {
   status: string;
-  model: { status: string; modelVersion?: string | null };
+  model: { status: string; modelVersion?: string | null; inferenceMode?: string; trainedOnRapidResQ?: boolean };
   evaluation: null | {
     modelVersion: string; algorithm: string; split: string; sampleCount: number;
     evaluatedAt: string; manifestSha256: string; metrics: Record<string, EvaluationMetrics>;

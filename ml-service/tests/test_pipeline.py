@@ -16,6 +16,7 @@ from training.data import read_manifest
 def client(tmp_path, monkeypatch):
     import app as module
     monkeypatch.setattr(module, 'MODEL_DIR', tmp_path)
+    monkeypatch.setenv('ML_MODEL_MODE', 'trained')
     with TestClient(app) as client:
         yield client
 

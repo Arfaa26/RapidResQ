@@ -22,9 +22,31 @@ def utc(value):
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
 
-def duplicates(request: DuplicateRequest):
+def duplicates(request: DuplicateRequest, semantic=None):
     report = request.report
     matches = []
+    eligible = [c for c in request.candidates if c.id != report.id and distance(report.location, c.location) <= 200
+                and abs((utc(report.createdAt) - utc(c.createdAt)).total_seconds()) <= 7200]
+    eligible.sort(key=lambda c: (distance(report.location, c.location), c.id))
+    report_text = f'{report.title} {report.description}'.strip()
+    semantic_scores = {}
+    semantic_status = semantic.status() if semantic else {'status': 'lexical_fallback'}
+    selected = []
+    budget = 30000 - len(report_text)
+    if semantic and semantic_status['status'] == 'ready' and len(report_text.split()) >= 4:
+        for candidate in eligible:
+            text = f'{candidate.title} {candidate.description}'.strip()
+            if len(text.split()) >= 4 and len(selected) < 20 and len(text) <= budget:
+                selected.append((candidate.id, text))
+                budget -= len(text)
+        if selected:
+            try:
+                scores = semantic.similarities([report_text] + [text for _, text in selected])
+                semantic_scores = dict(zip([key for key, _ in selected], scores))
+            except Exception:
+                import logging
+                logging.exception('Semantic matching failed; using explicit lexical fallback')
+                semantic_status = {**semantic_status, 'status': 'unavailable'}
     for candidate in request.candidates:
         meters = distance(report.location, candidate.location)
         seconds = abs((utc(report.createdAt) - utc(candidate.createdAt)).total_seconds())
@@ -32,8 +54,12 @@ def duplicates(request: DuplicateRequest):
             continue
         texts = [f'{x.title} {x.description}'.strip() for x in [report, candidate]]
         similarity = 0.
+        text_method = 'tfidf'
         # Short/generic one-word reports are not enough evidence for linking.
-        if all(len(t.split()) >= 4 for t in texts):
+        if candidate.id in semantic_scores:
+            similarity = semantic_scores[candidate.id]
+            text_method = 'minilm'
+        elif all(len(t.split()) >= 4 for t in texts):
             try:
                 vectors = TfidfVectorizer(ngram_range=(1, 2), sublinear_tf=True).fit_transform(texts)
                 similarity = float(cosine_similarity(vectors[0], vectors[1])[0, 0])
@@ -46,11 +72,15 @@ def duplicates(request: DuplicateRequest):
         if visual_match or similarity >= .8:
             matches.append({'incidentId': candidate.id, 'distanceMeters': meters,
                             'timeDifferenceMinutes': seconds/60, 'textSimilarity': similarity,
+                            'textMethod': text_method,
                             'imageHashDistance': hash_distance,
                             'locationUncertain': any((p.accuracyMeters or 0) > 200 for p in [report.location, candidate.location]),
-                            'reason': 'Within 200 m and 2 hours; ' + ('similar image pHash' if visual_match else 'text cosine similarity ≥ 0.80')})
+                            'reason': 'Within 200 m and 2 hours; ' + ('similar image pHash' if visual_match else f'{text_method} cosine similarity ≥ 0.80 (uncalibrated review threshold)')})
     matches.sort(key=lambda m: (-m['textSimilarity'], m['distanceMeters'], m['incidentId']))
-    return {'status': 'checked', 'matches': matches[:5], 'method': 'phash-tfidf-geo-time-v1'}
+    return {'status': 'checked', 'matches': matches[:5],
+            'method': 'phash-minilm-tfidf-geo-time-v2' if semantic_scores else 'phash-tfidf-geo-time-v1',
+            'semanticModel': semantic_status, 'semanticCandidatesChecked': len(semantic_scores),
+            'semanticCandidatesTruncated': bool(semantic and len(selected) < len(eligible))}
 
 
 def hotspots(request: HotspotRequest, now=None):

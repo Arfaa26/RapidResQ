@@ -75,9 +75,9 @@ Restart after switching modes. Trained mode uses trusted local `models/image/mod
 | `ML_CONTEXT_ZONES` | Node: reviewed geographic circles; empty means no population assumption |
 | `API_PROXY_TARGET` | Optional Vite development Node URL override |
 
-FastAPI reads exported process variables, not `.env.example` automatically. Keep React/Node on the existing Vercel setup. Host FastAPI separately with persistent model storage, HTTPS and a private key. Build Docker from `ml-service`, include installed snapshots or mount `MODEL_DIR`; the Docker build does not fetch weights. Use one worker initially. The local process used about 2.3 GiB working memory after inference; this is not a hosting guarantee. Measure peak RAM and latency on the deployment machine. A bounded inference queue returns 503 when busy; Node preserves manual-review fallback.
+FastAPI reads exported process variables, not `.env.example` automatically. Keep React/Node on the existing Vercel setup. Host FastAPI separately with persistent model storage, HTTPS and a private key. Build Docker from `ml-service`; it downloads the pinned pretrained snapshots into the image. For trained mode, use `DOWNLOAD_PRETRAINED=0` and mount trusted artifacts under `MODEL_DIR`. See [public hosting setup](../docs/ML_HOSTING.md). Use one worker initially. The local process used about 2.3 GiB working memory after inference; this is not a hosting guarantee. Measure peak RAM and latency on the deployment machine. A bounded inference queue returns 503 when busy; Node preserves manual-review fallback.
 
-The inherited authority UI has no authentication/role enforcement. Use a controlled demonstration environment. The app does not contact official emergency services. No public hosting or Vercel deployment was performed.
+The inherited authority UI has no authentication/role enforcement. Use a controlled demonstration environment. The app does not contact official emergency services. The website is deployed on Vercel; the separate public Python service is pending hosting account setup.
 
 ## Checks
 

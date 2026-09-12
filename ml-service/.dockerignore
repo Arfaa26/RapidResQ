@@ -3,6 +3,8 @@ __pycache__
 .pytest_cache
 datasets
 tests
-.env
+.env*
 .torch-cache
-models/pretrained/*/.cache
+models
+deploy
+*.log

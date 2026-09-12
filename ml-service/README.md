@@ -1,6 +1,6 @@
 # RapidResQ pretrained ML setup
 
-The default service now uses genuine pretrained SigLIP 2 (photos), DeBERTa (English text category/urgency), and multilingual MiniLM (duplicate text similarity). They run locally in FastAPI. Report content is not sent to Hugging Face. No training on RapidResQ incident data or domain accuracy is claimed; all pretrained suggestions require authority review.
+The default service uses genuine pretrained SigLIP 2 (photos), DeBERTa (English text category/urgency), and multilingual MiniLM (duplicate text similarity). Local development runs them in FastAPI. The public deployment sends report content from Vercel to your Hugging Face Space for inference; it does not upload reports to model repositories or use them for training. No training on RapidResQ incident data or domain accuracy is claimed; all pretrained suggestions require authority review.
 
 ## Install and start
 

@@ -49,7 +49,7 @@ The image adapter returns top-three relative candidate scores and an uncertainty
 - Empty evaluation states remain explicit. Refresh only reloads saved results; it does not train/evaluate a model.
 - Optional MobileNetV3-Small image training with real Grad-CAM, and TF-IDF/Logistic Regression text training. These are retained baselines, not the active pretrained stack.
 - Dataset manifest templates, event-based train/validation/test separation, leakage checks and separate evaluation scripts.
-- Explicit revision-pinned model download, local-only inference, private Node-to-Python connection, timeout/manual-review fallback and Docker configuration.
+- Explicit revision-pinned model download, inference within the configured ML host, private Node-to-Python connection, timeout/manual-review fallback and Docker configuration. Public report content is sent to the project's Hugging Face Space for inference, not uploaded to model repositories or used for training.
 - Existing simulation controls for fire/accident/civic incidents, reset and split-view demonstration.
 
 ## Infrastructure

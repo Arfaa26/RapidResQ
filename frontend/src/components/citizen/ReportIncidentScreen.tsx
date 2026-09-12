@@ -15,8 +15,9 @@ import { Incident, LocationData, AIAnalysisResult, IncidentCategory } from '../.
 import { MLPredictionDetails } from '../common/MLPredictionDetails';
 import { api } from '../../services/api';
 import { InteractiveMap } from '../common/InteractiveMap';
+import { LiveLocationStatus } from '../common/LiveLocationStatus';
 import { soundAlerts } from '../../utils/audioAlert';
-import { isFreshLiveLocation, locationService } from '../../services/locationService';
+import { isFreshLiveLocation, LIVE_LOCATION_AGE_MS, locationService } from '../../services/locationService';
 
 interface ReportIncidentScreenProps {
   onBack: () => void;
@@ -54,7 +55,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
 
     setIsLocating(true);
     setLocationError(null);
-    const request = locationService.getAccurateCurrentLocation({ forceRefresh });
+    const request = locationService.getAccurateCurrentLocation({ forceRefresh, refine: true });
     locationRequestRef.current = request;
 
     try {
@@ -148,8 +149,8 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
     try {
       setIsSubmitting(true);
       setSubmissionError(null);
-      const liveLocation = isFreshLiveLocation(selectedLocation)
-        ? selectedLocation : await refreshAccurateLocation();
+      const liveLocation = await locationService.getReportLocation();
+      setAcquiredLocation(liveLocation);
       const formData = new FormData();
       if (title) formData.append('title', title);
       formData.append('description', description);
@@ -338,20 +339,11 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
             <MapPin size={16} className="text-[#5E43F3] flex-shrink-0" />
             <div className="min-w-0 flex-1">
               <div className="truncate font-medium">{selectedLocation.address}</div>
-              {selectedLocation.source === 'GPS' && selectedLocation.accuracyMeters !== undefined && (
-                <div className="mt-0.5 text-[10px] font-bold text-emerald-600">
-                  Device location · accurate to approximately {selectedLocation.accuracyMeters} m
-                </div>
-              )}
-              {selectedLocation.source === 'GPS' && selectedLocation.capturedAt && (
-                <div className="mt-0.5 text-[10px] text-gray-500">
-                  Captured {new Date(selectedLocation.capturedAt).toLocaleTimeString()}
-                </div>
-              )}
+              <LiveLocationStatus location={selectedLocation} />
             </div>
           </div>
 
-          {locationError && !isFreshLiveLocation(selectedLocation) && (
+          {locationError && !isFreshLiveLocation(selectedLocation, LIVE_LOCATION_AGE_MS) && (
             <div className="mb-2 rounded-xl bg-red-50 px-3 py-2 text-[10px] font-semibold text-red-700">
               {locationError}
             </div>
@@ -362,7 +354,7 @@ export const ReportIncidentScreen: React.FC<ReportIncidentScreenProps> = ({
           </div>
 
           <p className="text-[10px] leading-relaxed text-gray-500">
-            Your latest device reading from the last 5 minutes will be sent with its accuracy and capture time. Refresh GPS if you have moved or the pin looks wrong.
+            Reports use a device reading from the last 15 seconds. We request high accuracy and allow up to 10 seconds for GPS to improve. The shaded circle shows the device's estimated uncertainty; accuracy depends on your device and signal.
           </p>
         </div>
 

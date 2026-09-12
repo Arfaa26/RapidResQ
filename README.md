@@ -61,3 +61,11 @@ Run `python -m pytest -q` from `ml-service` in the Python environment. PostgreSQ
 Keep the existing Vercel frontend and Node API configuration. Deploy FastAPI separately with installed pretrained snapshots (or optional trained artifacts), HTTPS and a shared `ML_SERVICE_KEY`, then configure Node's `ML_SERVICE_URL`. The Dockerfile requires a service key and installs CPU PyTorch wheels. Training is never performed in the frontend or during requests.
 
 The inherited authority interface has no authentication/role enforcement. Use a controlled project-demo environment until those controls and real-world ML validation are added. The app does not contact official emergency services.
+
+## Fresh location reporting
+
+The browser requests high-accuracy, uncached device positions and keeps the map updated from a shared live watch. Normal report submission accepts a reading at most 15 seconds old. If needed, acquisition waits up to ten seconds for a fix within 50 m; otherwise it sends the best fresh observation with its actual estimated accuracy. Coordinates retain the device precision and original timestamp. Malformed or unavailable readings never become an invented location.
+
+The home/report screens display capture age, estimated uncertainty and coordinates. The map retains its accuracy circle. SOS uses a fresh observation promptly and may fall back to an explicitly timestamped reading up to five minutes old if refresh fails, but never after permission denial. A browser cannot guarantee GPS-level accuracy on hardware without a good location signal.
+
+Validation after this change: 29 Node/GPS/API/PostgreSQL/formatting tests passed; frontend lint, production build and backend build passed. The unchanged Python suite previously passed 21 tests. Added GPS tests cover movement, stale-cache avoidance, refinement, coarse-signal deadlines, permission denial and invalid device data. Physical phone GPS accuracy still requires a test on the user's device.

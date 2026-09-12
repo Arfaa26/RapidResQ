@@ -19,7 +19,7 @@ import { IncidentTrackerScreen } from './components/citizen/IncidentTrackerScree
 import { CommunityAlertsScreen } from './components/citizen/CommunityAlertsScreen';
 import { AuthorityDashboard } from './components/authority/AuthorityDashboard';
 
-import { isFreshLiveLocation, locationService } from './services/locationService';
+import { locationService } from './services/locationService';
 
 type CitizenScreen = 'ONBOARDING' | 'HOME' | 'ACTIVE_SOS' | 'REPORT' | 'TRACKING' | 'ALERTS';
 type ViewRole = 'CITIZEN' | 'AUTHORITY' | 'SPLIT_VIEW';
@@ -112,9 +112,7 @@ export function App() {
     sendingSosRef.current = true;
     setIsSendingSos(true);
     try {
-      const liveLocation = isFreshLiveLocation(userLocation)
-        ? userLocation
-        : await locationService.getAccurateCurrentLocation();
+      const liveLocation = await locationService.getReportLocation({ emergency: true });
       setUserLocation(liveLocation);
 
       const formData = new FormData();

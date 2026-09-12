@@ -22,3 +22,11 @@ The Python suite also retains the original isolated MobileNet/Grad-CAM and fitte
 The local process used approximately 2.3 GiB working memory after inference. Cold startup takes longer than an individual prediction. Hosting requirements and production latency must be measured on the actual host. Text triage currently supports English; multilingual capability is used for duplicate embeddings. SigLIP heatmaps are explicitly unsupported.
 
 No hosted Neon changes, GitHub push, Vercel deployment, public ML hosting, Docker build, comprehensive visual regression, operational emergency validation or production load test was performed. Database behavior was checked locally using PGlite. The inherited lack of authority authentication remains a limitation for public operation. The local preview uses demonstration/test records only.
+
+## Fresh location reporting
+
+The browser requests high-accuracy, uncached device positions and keeps the map updated from a shared live watch. Normal report submission accepts a reading at most 15 seconds old. If needed, acquisition waits up to ten seconds for a fix within 50 m; otherwise it sends the best fresh observation with its actual estimated accuracy. Coordinates retain the device precision and original timestamp. Malformed or unavailable readings never become an invented location.
+
+The home/report screens display capture age, estimated uncertainty and coordinates. The map retains its accuracy circle. SOS uses a fresh observation promptly and may fall back to an explicitly timestamped reading up to five minutes old if refresh fails, but never after permission denial. A browser cannot guarantee GPS-level accuracy on hardware without a good location signal.
+
+Validation after this change: 29 Node/GPS/API/PostgreSQL/formatting tests passed; frontend lint, production build and backend build passed. The unchanged Python suite previously passed 21 tests. Added GPS tests cover movement, stale-cache avoidance, refinement, coarse-signal deadlines, permission denial and invalid device data. Physical phone GPS accuracy still requires a test on the user's device.

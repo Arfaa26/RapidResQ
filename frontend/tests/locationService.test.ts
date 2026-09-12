@@ -121,3 +121,73 @@ test('freshness rejects fallback, stale, future, and invalid locations', async (
     { capturedAt: new Date(Date.now() + 1_000).toISOString() },
   ]) assert.equal(env.isFreshLiveLocation({ ...good, ...change }), false);
 });
+
+test('report requests a fresh high-accuracy fix rather than reusing a three-minute-old reading', async (t) => {
+  const env = await setup(t);
+  env.locationService.watchLiveLocation(() => undefined);
+  env.position(20);
+  t.mock.timers.tick(180_000);
+  const pending = env.locationService.getReportLocation();
+  assert.equal(env.geolocation.getCurrentPosition.mock.callCount(), 1);
+  assert.equal(env.geolocation.getCurrentPosition.mock.calls[0].arguments[2].maximumAge, 0);
+  assert.equal(env.geolocation.watchPosition.mock.calls[0].arguments[2].maximumAge, 0);
+  env.position(900, 0, 19.05);
+  t.mock.timers.tick(1_000);
+  env.position(18, 0, 19.051234567);
+  const location = await pending;
+  assert.equal(location.lat, 19.051234567);
+  assert.equal(location.accuracyMeters, 18);
+  assert.equal(location.capturedAt, new Date().toISOString());
+});
+
+test('refinement returns best observed fix at the deadline with its actual uncertainty', async (t) => {
+  const env = await setup(t);
+  const pending = env.locationService.getReportLocation();
+  env.position(1200);
+  t.mock.timers.tick(1_000);
+  env.position(178);
+  const capturedAt = new Date().toISOString();
+  t.mock.timers.tick(1_000);
+  env.position(500);
+  t.mock.timers.tick(8_000);
+  const location = await pending;
+  assert.equal(location.accuracyMeters, 178);
+  assert.equal(location.capturedAt, capturedAt);
+  assert.equal(env.geolocation.clearWatch.mock.callCount(), 1);
+});
+
+test('normal reports fail without fresh GPS; SOS can retain a timestamped last-known fix', async (t) => {
+  const env = await setup(t);
+  env.locationService.watchLiveLocation(() => undefined);
+  env.position(60);
+  const capturedAt = new Date().toISOString();
+  t.mock.timers.tick(30_000);
+  const normal = env.locationService.getReportLocation();
+  const rejected = assert.rejects(normal, /No recent location/);
+  t.mock.timers.tick(10_000);
+  await rejected;
+  const sos = env.locationService.getReportLocation({ emergency: true });
+  t.mock.timers.tick(10_000);
+  assert.equal((await sos).capturedAt, capturedAt);
+});
+
+test('permission denial during refinement rejects even a previously observed fix', async (t) => {
+  const env = await setup(t);
+  const pending = env.locationService.getReportLocation();
+  const rejected = assert.rejects(pending, /permission is blocked/);
+  env.position(900);
+  env.error(1);
+  await rejected;
+});
+
+test('malformed device coordinates cannot throw or create a fake reading', async (t) => {
+  const env = await setup(t);
+  const updates: any[] = [];
+  env.locationService.watchLiveLocation((location: any) => updates.push(location));
+  assert.doesNotThrow(() => env.position(10, Infinity));
+  env.position(NaN);
+  env.position(10, 0, 200);
+  assert.equal(updates.length, 0);
+  env.position(18.4);
+  assert.equal(updates[0].accuracyMeters, 19);
+});

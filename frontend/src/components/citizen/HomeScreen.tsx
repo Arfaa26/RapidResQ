@@ -14,6 +14,7 @@ import {
 import { Incident, LocationData } from '../../types';
 import { soundAlerts } from '../../utils/audioAlert';
 import { isFreshLiveLocation, locationService } from '../../services/locationService';
+import { LiveLocationStatus } from '../common/LiveLocationStatus';
 
 interface HomeScreenProps {
   onTriggerSos: () => void;
@@ -142,9 +143,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <div className="text-[11px] font-bold text-[#1E1B4B] truncate">
               📍 {userLocation.address}
             </div>
-            {userLocation.source === 'GPS' && userLocation.accuracyMeters !== undefined && (
-              <div className="text-[9px] font-semibold text-emerald-600">GPS accuracy ±{userLocation.accuracyMeters} m</div>
-            )}
+            <LiveLocationStatus location={userLocation} />
           </div>
         </div>
         <button
